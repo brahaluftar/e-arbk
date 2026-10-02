@@ -1,0 +1,10 @@
+Options -Indexes
+DirectoryIndex index.php
+<FilesMatch "^(\.env|composer\.(json|lock)|phpunit\.xml)$">
+    Require all denied
+</FilesMatch>
+RewriteEngine On
+RewriteRule ^admin/dashboard/?$ public/admin/dashboard.php [L,QSA]
+RewriteRule ^admin/businesses/classification/?$ public/admin/businesses/classification.php [L,QSA]
+RewriteRule ^admin/businesses/([0-9]+)/?$ public/admin/businesses/view.php?id=$1 [L,QSA]
+RewriteRule ^admin/businesses/?$ public/admin/businesses/index.php [L,QSA]

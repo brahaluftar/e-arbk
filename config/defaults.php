@@ -1,0 +1,19 @@
+<?php
+declare(strict_types=1);
+
+return [
+    'APP_ENV' => 'production',
+    'APP_DEBUG' => 'false',
+    'APP_URL' => 'http://localhost/arbk',
+    'APP_TIMEZONE' => 'Europe/Warsaw',
+    'APP_SESSION_NAME' => 'arbk_admin',
+    'DB_HOST' => 'alternator\\sql2025',
+    'DB_NAME' => 'ARBK',
+    'DB_USER' => '',
+    'DB_PASSWORD' => '',
+    'DB_TRUSTED_CONNECTION' => 'true',
+    'DB_ENCRYPT' => 'false',
+    'DB_TRUST_SERVER_CERTIFICATE' => 'true',
+    'PAGE_SIZE' => '25',
+    'CSRF_TTL_SECONDS' => '7200',
+];
