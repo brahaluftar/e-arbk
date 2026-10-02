@@ -25,7 +25,7 @@ final class BusinessImportService
         $path=(string)$run['storage_path'];if(!preg_match('/^(?:[A-Za-z]:[\\\\\/]|\/)/',$path))$path=dirname(__DIR__,2).DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$path);if(!is_file($path))throw new RuntimeException('Import file is missing.');$runId=(int)$run['id'];$sourceType=(string)$run['source_type'];
         $this->pdo->prepare('DELETE dbo.business_import_staging WHERE import_run_id=:id')->execute(['id'=>$runId]);
         $headers=[];$rowNumber=0;$batch=[];
-        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[])continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=80){$this->insertBatch($runId,$batch);$batch=[];}}
+        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[])continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
         if($batch!==[])$this->insertBatch($runId,$batch);
         $this->merge($runId,$sourceType,max(0,$rowNumber-1));
     }
@@ -39,9 +39,17 @@ final class BusinessImportService
     /** @param list<array{source_row_number:int,data:array<string,mixed>}> $rows */
     private function insertBatch(int $runId,array $rows): void
     {
-        $columns=implode(',',self::FIELDS);$groups=[];$values=[];
-        foreach($rows as $entry){$groups[]='('.implode(',',array_fill(0,count(self::FIELDS)+2,'?')).')';$values[]=$runId;$values[]=$entry['source_row_number'];foreach(self::FIELDS as $field)$values[]=$entry['data'][$field]??null;}
-        $sql="INSERT dbo.business_import_staging(import_run_id,source_row_number,$columns) VALUES ".implode(',',$groups);$this->pdo->prepare($sql)->execute($values);
+        $payload=[];
+        foreach($rows as $entry)$payload[]=['source_row_number'=>$entry['source_row_number']]+array_intersect_key($entry['data'],array_flip(self::FIELDS));
+        $json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR);
+        $sql=<<<'SQL'
+INSERT dbo.business_import_staging(import_run_id,source_row_number,business_number,legal_name,trade_name,business_type,nace_raw,nace_code,nace_description,sector_raw,sector_clean,employee_count,business_size,total_m,total_f,city,business_status,business_year,business_month,closed_date,validation_error)
+SELECT :run_id,j.source_row_number,j.business_number,j.legal_name,j.trade_name,j.business_type,j.nace_raw,j.nace_code,j.nace_description,j.sector_raw,j.sector_clean,j.employee_count,j.business_size,j.total_m,j.total_f,j.city,j.business_status,j.business_year,j.business_month,j.closed_date,j.validation_error
+FROM OPENJSON(:payload) WITH(
+ source_row_number int '$.source_row_number',business_number varchar(20) '$.business_number',legal_name nvarchar(510) '$.legal_name',trade_name nvarchar(510) '$.trade_name',business_type nvarchar(100) '$.business_type',nace_raw nvarchar(700) '$.nace_raw',nace_code varchar(20) '$.nace_code',nace_description nvarchar(510) '$.nace_description',sector_raw nvarchar(700) '$.sector_raw',sector_clean nvarchar(510) '$.sector_clean',employee_count int '$.employee_count',business_size nvarchar(40) '$.business_size',total_m int '$.total_m',total_f int '$.total_f',city nvarchar(200) '$.city',business_status nvarchar(40) '$.business_status',business_year varchar(4) '$.business_year',business_month varchar(20) '$.business_month',closed_date date '$.closed_date',validation_error nvarchar(500) '$.validation_error'
+)j;
+SQL;
+        $statement=$this->pdo->prepare($sql);$statement->bindValue('run_id',$runId,PDO::PARAM_INT);$statement->bindValue('payload',$json,PDO::PARAM_STR);$statement->execute();
     }
 
     private function merge(int $runId,string $sourceType,int $totalRows): void

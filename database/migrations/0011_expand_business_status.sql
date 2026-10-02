@@ -1,0 +1,3 @@
+IF COL_LENGTH('dbo.ARBK_LIST', 'Statusi') IS NOT NULL
+    ALTER TABLE dbo.ARBK_LIST ALTER COLUMN Statusi nvarchar(40) NULL;
+GO
