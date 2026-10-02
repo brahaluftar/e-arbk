@@ -1,0 +1,13 @@
+Options -Indexes
+DirectoryIndex index.php
+RewriteEngine On
+
+RewriteRule ^$ admin/dashboard.php [L]
+RewriteRule ^admin/dashboard/?$ admin/dashboard.php [L,QSA]
+RewriteRule ^admin/businesses/classification/?$ admin/businesses/classification.php [L,QSA]
+RewriteRule ^admin/businesses/([0-9]+)/?$ admin/businesses/view.php?id=$1 [L,QSA]
+RewriteRule ^admin/businesses/?$ admin/businesses/index.php [L,QSA]
+
+<FilesMatch "^\.ht">
+    Require all denied
+</FilesMatch>

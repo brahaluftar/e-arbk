@@ -1,4 +1,8 @@
 /.env
 /vendor/
 /var/log/*.log
+/var/imports/*
+!/var/imports/.gitkeep
+*.bak
+*.sqlbak
 /.phpunit.cache/

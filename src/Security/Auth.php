@@ -33,7 +33,7 @@ final class Auth
     }
 
     public function logout(): void { $_SESSION = []; if (session_id() !== '') session_destroy(); }
-    public function requireUser(): array { $user=$this->user(); if ($user===null) { header('Location: ' . app_url('/public/auth/login.php')); exit; } return $user; }
+    public function requireUser(): array { $user=$this->user(); if ($user===null) { header('Location: ' . app_url('/auth/login.php')); exit; } return $user; }
     /** @param list<string> $roles */
     public function requireRole(array $roles): array { $user=$this->requireUser(); if (!in_array($user['role_code'],$roles,true)) { http_response_code(403); exit('Access denied.'); } return $user; }
 }

@@ -9,7 +9,15 @@ Framework-free PHP 8.1+ module for ARBK/ATK business status normalization and mu
 3. Run `php bin/migrate.php`.
 4. Create the first administrator with `php bin/create-admin.php admin@example.test "Full Name" "a-long-password"`.
 5. Run `php bin/sync-atk.php`, `php bin/sync-tariff-mappings.php`, then `php bin/classify-nace.php` after confirming `nace_list` is populated.
-6. Open `http://localhost/arbk/public/auth/login.php`.
+6. Open `http://localhost/arbk/auth/login.php`.
+
+For production, use `public/` as the website document root and follow [docs/production-deployment.md](docs/production-deployment.md).
+
+Production operations include database-backed login throttling, `/health.php`, strict HTTPS/cookie configuration, `bin/preflight-production.php`, non-overlapping scheduled synchronization, and managed or SQL Server backup modes.
+
+## Excel imports
+
+Administrators can queue the full, women-owned, and closed-business XLSX exports from **Importet**. `bin/process-imports.php` processes the queue directly; the regular scheduler processes one queued workbook per run. The streaming reader keeps memory bounded, splits `NNNN-description` into `NACE_CODE_REG` and `NACEPERSHKRIMI`, and removes the leading sector letter/dash. Imports are deduplicated by business number and file SHA-256 and are fully audited.
 
 The migration is additive and does not add foreign keys to legacy master tables. Batch jobs are transactional and idempotent. Tariff mapping fills only empty master fields; existing manual values are not overwritten.
 
