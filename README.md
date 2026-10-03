@@ -19,6 +19,8 @@ Production operations include database-backed login throttling, `/health.php`, s
 
 Administrators can queue the full, women-owned, and closed-business XLSX exports from **Importet**. Only rows whose `Qyteti` value is exactly `Prishtinë` are imported. `bin/process-imports.php` processes the queue directly; the regular scheduler processes one queued workbook per run. The streaming reader keeps memory bounded, splits `NNNN-description` into `NACE_CODE_REG` and `NACEPERSHKRIMI`, and removes the leading sector letter/dash. Imports are deduplicated by business number and file SHA-256 and are fully audited.
 
+Statuses such as `Pasiv-DD/MM/YYYY` are normalized into the `Pasiv` flag and `date_pasivizimit`, and also set `ATK_MBYLLUR=1`. Administrators and officials can manually edit the supported business fields from the business detail page; every update is validated and audited.
+
 The migration is additive and does not add foreign keys to legacy master tables. Batch jobs are transactional and idempotent. Tariff mapping fills only empty master fields; existing manual values are not overwritten.
 
 ## Roles
