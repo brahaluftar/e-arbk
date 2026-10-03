@@ -9,6 +9,7 @@ use Throwable;
 
 final class BusinessImportService
 {
+    private const IMPORT_CITY='Prishtinë';
     private const FIELDS=['business_number','legal_name','trade_name','business_type','nace_raw','nace_code','nace_description','sector_raw','sector_clean','employee_count','business_size','total_m','total_f','city','business_status','business_year','business_month','closed_date','validation_error'];
     public function __construct(private PDO $pdo,private AuditLogger $audit,private XlsxRowReader $reader=new XlsxRowReader(),private BusinessImportNormalizer $normalizer=new BusinessImportNormalizer()){}
 
@@ -25,7 +26,7 @@ final class BusinessImportService
         $path=(string)$run['storage_path'];if(!preg_match('/^(?:[A-Za-z]:[\\\\\/]|\/)/',$path))$path=dirname(__DIR__,2).DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$path);if(!is_file($path))throw new RuntimeException('Import file is missing.');$runId=(int)$run['id'];$sourceType=(string)$run['source_type'];
         $this->pdo->prepare('DELETE dbo.business_import_staging WHERE import_run_id=:id')->execute(['id'=>$runId]);
         $headers=[];$rowNumber=0;$batch=[];
-        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[])continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
+        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[]||($normalized['city']??null)!==self::IMPORT_CITY)continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
         if($batch!==[])$this->insertBatch($runId,$batch);
         $this->merge($runId,$sourceType,max(0,$rowNumber-1));
     }
