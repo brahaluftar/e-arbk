@@ -2,7 +2,7 @@
 declare(strict_types=1);
 $app=require dirname(__DIR__,3).'/bootstrap.php';
 $app['auth']->requireUser();
-$filters=['q'=>trim((string)($_GET['q']??'')),'nace'=>trim((string)($_GET['nace']??'')),'classification'=>(string)($_GET['classification']??''),'atk_status'=>(string)($_GET['atk_status']??'')];
+$filters=['q'=>trim((string)($_GET['q']??'')),'nace'=>trim((string)($_GET['nace']??'')),'classification'=>(string)($_GET['classification']??''),'atk_status'=>(string)($_GET['atk_status']??''),'pronare_grua'=>(string)($_GET['pronare_grua']??''),'pronar_veteran'=>(string)($_GET['pronar_veteran']??'')];
 $columns=[
     'REGULATION_ID'=>'ID','NRBIZ'=>'Numri i biznesit','Emri'=>'Emri ligjor','EMRI_TREGTAR'=>'Emri tregtar','Lloji'=>'Lloji i biznesit','Qyteti'=>'Qyteti','Statusi'=>'Statusi ARBK','Pasiv'=>'Pasiv','date_pasivizimit'=>'Data e pasivizimit',
     'NACE_CODE_REG'=>'Kodi NACE ARBK','NACEPERSHKRIMI'=>'Përshkrimi NACE','SEKTORI'=>'Sektori','NR_PUNETOREVE'=>'Nr. punëtorëve','MADHESIA'=>'Madhësia','TOTAL_M'=>'Total M','TOTAL_F'=>'Total F','Viti'=>'Viti','MUAJI'=>'Muaji','DATA_SHUARJES'=>'Data e shuarjes',
