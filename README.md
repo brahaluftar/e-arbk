@@ -21,6 +21,8 @@ Administrators can queue the full, women-owned, and closed-business XLSX exports
 
 Statuses such as `Pasiv-DD/MM/YYYY` are normalized into the `Pasiv` flag and `date_pasivizimit`, and also set `ATK_MBYLLUR=1`. Administrators and officials can manually edit the supported business fields from the business detail page; every update is validated and audited.
 
+The business and NACE-classification lists can be exported to XLSX. Exports include the complete filtered result rather than only the current paginated page.
+
 The migration is additive and does not add foreign keys to legacy master tables. Batch jobs are transactional and idempotent. Tariff mapping fills only empty master fields; existing manual values are not overwritten.
 
 ## Roles

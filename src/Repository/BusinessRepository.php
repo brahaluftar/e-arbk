@@ -31,6 +31,15 @@ final class BusinessRepository
         $statement=$this->pdo->prepare($sql); $statement->execute(['id'=>$id]); $row=$statement->fetch(); return is_array($row)?$row:null;
     }
 
+    /** @param array<string,string> $filters */
+    public function export(array $filters): \PDOStatement
+    {
+        [$where,$params]=$this->where($filters);
+        $candidateJoin="LEFT JOIN (SELECT NACE_CODE,COUNT(*) candidate_count FROM dbo.NACE_LIST WHERE NACE_CODE IS NOT NULL GROUP BY NACE_CODE) c ON c.NACE_CODE=a.NACE_CODE_REG";
+        $sql="SELECT a.REGULATION_ID,a.NRBIZ,a.Emri,a.EMRI_TREGTAR,a.Lloji,a.Qyteti,a.Statusi,a.Pasiv,a.date_pasivizimit,a.NACE_CODE_REG,a.NACEPERSHKRIMI,a.SEKTORI,a.NR_PUNETOREVE,a.MADHESIA,a.TOTAL_M,a.TOTAL_F,a.Viti,a.MUAJI,a.DATA_SHUARJES,a.ATK_MBYLLUR,a.ATK_DATEMBYLLJE,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) normalized_atk_status,a.NACE_CODE_TARIFF,a.nace_veprimtaria_tariff,a.NACE_REG_TARIFF,x.nace_category,x.tariff_snapshot,x.assignment_method,a.pronare_grua,a.pronesia_grua,a.pronar_veteran,a.perqindja_veteran,a.tarifa_me_lirim FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID";
+        $statement=$this->pdo->prepare($sql);$statement->execute($params);return $statement;
+    }
+
     /** @return list<array<string,mixed>> */
     public function validCategories(int $businessId): array
     {
