@@ -34,4 +34,17 @@ final class BusinessRepositoryDashboardTest extends TestCase
         self::assertContains(2025,$stats['years']);
         self::assertContains(2026,$stats['years']);
     }
+
+    public function testPayableInvoiceQueryGroupsItsOrderingColumns(): void
+    {
+        $statement = $this->createMock(PDOStatement::class);
+        $statement->method('fetchAll')->willReturn([]);
+        $pdo = $this->createMock(PDO::class);
+        $pdo->expects(self::once())->method('query')->with(self::callback(static function (string $sql): bool {
+            return str_contains($sql,'GROUP BY i.id,i.invoice_number,i.amount,i.due_on,i.issued_on,a.NRBIZ,a.Emri')
+                && str_contains($sql,'ORDER BY i.due_on,i.issued_on,i.id');
+        }))->willReturn($statement);
+
+        self::assertSame([],(new BusinessRepository($pdo))->payableInvoices());
+    }
 }

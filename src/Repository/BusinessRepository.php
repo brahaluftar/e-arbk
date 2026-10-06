@@ -149,7 +149,7 @@ final class BusinessRepository
         return $this->pdo->query("SELECT TOP (200) i.id,i.invoice_number,i.amount-COALESCE(SUM(p.amount),0) outstanding,a.NRBIZ registration_number,a.Emri legal_name
             FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id
             LEFT JOIN dbo.business_invoice_payments p ON p.invoice_id=i.id
-            GROUP BY i.id,i.invoice_number,i.amount,a.NRBIZ,a.Emri
+            GROUP BY i.id,i.invoice_number,i.amount,i.due_on,i.issued_on,a.NRBIZ,a.Emri
             HAVING i.amount-COALESCE(SUM(p.amount),0)>0 ORDER BY i.due_on,i.issued_on,i.id")->fetchAll();
     }
 
