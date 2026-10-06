@@ -61,7 +61,7 @@ bash /cloudclusters/deploy-arbk.sh /cloudclusters/e-arbk-VERSION.zip activate
 ```
 
 `database-import` is the explicit schema/data transfer command. It checks every
-transfer file's SHA-256, creates all 12 application tables, sequence, defaults,
+transfer file's SHA-256, creates all 14 application tables, sequence, defaults,
 indexes, primary/unique/foreign keys, check constraints and `v_business_master`.
 Rows are imported in batches using typed OPENJSON and a single transaction.
 IDs, GUIDs, Unicode, decimals, floats, timestamps and password hashes are retained;
@@ -105,18 +105,25 @@ The admin dashboard estimates potential tariff income for active businesses only
 For each business it uses `tarifa_me_lirim`, then `NACE_REG_TARIFF`, then the
 active classification tariff snapshot. Businesses without any of those values are
 counted separately. These are indicative tariff values, not collected or accrued
-accounting income. The application does not currently store invoices or payments,
-so the invoiced, to-be-invoiced, and paid cards explicitly show that those amounts
-are not recorded; do not interpret them as zero balances.
+accounting income. Invoices and payments recorded through the admin finance page
+populate the corresponding totals; existing history must be entered/imported before
+those figures are complete. The estimated uninvoiced balance uses current tariff
+fields and active businesses, so it is not a historical tariff reconstruction.
+Invoices are unique per business and fiscal year; payment entries are audited,
+can be partial, and cannot exceed the invoice balance. The yearly paid total follows
+payment dates in that calendar year, while unpaid balance follows invoices issued
+in the selected fiscal year.
 
 ## Data selection
 
 Full rows from `ARBK_LIST`, `ATK_LIST`, `NACE_LIST`, `app_users`,
 `business_atk_status`, `business_nace_assignments`, `audit_log`,
-`business_import_runs`, `business_import_staging`, and `schema_migrations` are
-included. `login_rate_limits` is created empty so workstation lockouts do not move
-to production. The three original completed-import XLSX files are included with
-their checked hashes and portable paths. No import is automatically replayed.
+`business_import_runs`, `business_import_staging`, `schema_migrations`,
+`business_invoices`, and `business_invoice_payments` are included.
+`login_rate_limits` and `password_reset_tokens` are created empty so workstation
+lockouts and active reset links do not move to production. The three original
+completed-import XLSX files are included with their checked hashes and portable
+paths. No import is automatically replayed.
 
 The unused legacy tables `arbk`, `atk2`, `BizList1` and old stored procedures are
 excluded. They are not referenced by the application and some old procedure

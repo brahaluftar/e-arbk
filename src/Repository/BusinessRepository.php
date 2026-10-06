@@ -54,10 +54,11 @@ final class BusinessRepository
         return $this->pdo->query($sql)->fetch() ?: [];
     }
 
-    /** @return array{estimated_income:string|float|int,priced_businesses:int|string,unpriced_businesses:int|string} */
-    public function financialDashboard(): array
+    /** @return array{year:int,years:list<int>,estimated_income:float,priced_businesses:int,unpriced_businesses:int,invoiced:float,to_be_invoiced:float,paid:float,to_be_paid:float,monthly:list<array{month:int,invoiced:float,paid:float}>} */
+    public function financialDashboard(int $year): array
     {
-        $sql = "WITH active_businesses AS (
+        $year = max(2000, min(2100, $year));
+        $sql = "WITH annual_estimate AS (
             SELECT a.REGULATION_ID,
                 COALESCE(
                     TRY_CONVERT(decimal(19,2), a.tarifa_me_lirim),
@@ -68,12 +69,88 @@ final class BusinessRepository
             LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID
             LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL
             WHERE COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END)='ACTIVE'
+                AND (a.Viti IS NULL OR TRY_CONVERT(int,a.Viti)<=:year)
         )
-        SELECT COALESCE(SUM(estimated_tariff),CONVERT(decimal(38,2),0)) estimated_income,
+        SELECT COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),CONVERT(decimal(38,2),0)) estimated_income,
+            CASE WHEN COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),0)-COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:to_invoice_year),0)>=0 THEN COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),0)-COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:to_invoice_year_2),0) ELSE 0 END to_be_invoiced,
+            COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:invoice_year_2),CONVERT(decimal(38,2),0)) invoiced,
+            COALESCE((SELECT SUM(p.amount) FROM dbo.business_invoice_payments p WHERE YEAR(p.paid_on)=:paid_year),CONVERT(decimal(38,2),0)) paid,
+            COALESCE((SELECT SUM(CASE WHEN i.amount-COALESCE(paid.amount,0)>0 THEN i.amount-COALESCE(paid.amount,0) ELSE 0 END) FROM dbo.business_invoices i OUTER APPLY(SELECT SUM(p.amount) amount FROM dbo.business_invoice_payments p WHERE p.invoice_id=i.id) paid WHERE i.fiscal_year=:invoice_year_3),CONVERT(decimal(38,2),0)) to_be_paid,
             SUM(CASE WHEN estimated_tariff IS NOT NULL THEN 1 ELSE 0 END) priced_businesses,
             SUM(CASE WHEN estimated_tariff IS NULL THEN 1 ELSE 0 END) unpriced_businesses
-        FROM active_businesses";
-        return $this->pdo->query($sql)->fetch() ?: ['estimated_income'=>0,'priced_businesses'=>0,'unpriced_businesses'=>0];
+        FROM annual_estimate";
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute(['year'=>$year,'to_invoice_year'=>$year,'to_invoice_year_2'=>$year,'invoice_year_2'=>$year,'paid_year'=>$year,'invoice_year_3'=>$year]);
+        $totals = $statement->fetch() ?: [];
+        $monthlyStatement = $this->pdo->prepare("WITH month_list AS (
+            SELECT month FROM (VALUES(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12)) months(month)
+            ), invoice_totals AS (
+                SELECT MONTH(issued_on) month,SUM(amount) amount FROM dbo.business_invoices WHERE fiscal_year=:year GROUP BY MONTH(issued_on)
+            ), payment_totals AS (
+                SELECT MONTH(p.paid_on) month,SUM(p.amount) amount FROM dbo.business_invoice_payments p WHERE YEAR(p.paid_on)=:paid_year GROUP BY MONTH(p.paid_on)
+            )
+            SELECT m.month,COALESCE(i.amount,0) invoiced,COALESCE(p.amount,0) paid
+            FROM month_list m LEFT JOIN invoice_totals i ON i.month=m.month LEFT JOIN payment_totals p ON p.month=m.month ORDER BY m.month");
+        $monthlyStatement->execute(['year'=>$year,'paid_year'=>$year]);
+        $yearsStatement = $this->pdo->query('SELECT DISTINCT fiscal_year FROM dbo.business_invoices ORDER BY fiscal_year DESC');
+        $years = array_map('intval', $yearsStatement->fetchAll(PDO::FETCH_COLUMN));
+        if (!in_array($year, $years, true)) $years[] = $year;
+        rsort($years);
+        $estimated = (float)($totals['estimated_income']??0);
+        $invoiced = (float)($totals['invoiced']??0);
+        $paid = (float)($totals['paid']??0);
+        return [
+            'year'=>$year,
+            'years'=>$years,
+            'estimated_income'=>$estimated,
+            'priced_businesses'=>(int)($totals['priced_businesses']??0),
+            'unpriced_businesses'=>(int)($totals['unpriced_businesses']??0),
+            'invoiced'=>$invoiced,
+            'to_be_invoiced'=>(float)($totals['to_be_invoiced']??0),
+            'paid'=>$paid,
+            'to_be_paid'=>(float)($totals['to_be_paid']??0),
+            'monthly'=>$monthlyStatement->fetchAll(),
+        ];
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function financeBusinesses(int $year, string $query = ''): array
+    {
+        $statement = $this->pdo->prepare("SELECT TOP (50) a.REGULATION_ID id,a.NRBIZ registration_number,a.Emri legal_name,
+                COALESCE(TRY_CONVERT(decimal(18,2),a.tarifa_me_lirim),TRY_CONVERT(decimal(18,2),a.NACE_REG_TARIFF),TRY_CONVERT(decimal(18,2),x.tariff_snapshot)) estimated_tariff
+            FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID
+            LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL
+            WHERE COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END)='ACTIVE'
+                AND (a.Viti IS NULL OR TRY_CONVERT(int,a.Viti)<=:year)
+                AND NOT EXISTS(SELECT 1 FROM dbo.business_invoices i WHERE i.business_id=a.REGULATION_ID AND i.fiscal_year=:invoice_year)
+                AND (:query='' OR a.NRBIZ LIKE :number_query OR a.Emri LIKE :name_query)
+            ORDER BY a.Emri,a.REGULATION_ID");
+        $statement->execute(['year'=>$year,'invoice_year'=>$year,'query'=>$query,'number_query'=>'%'.$query.'%','name_query'=>'%'.$query.'%']);
+        return $statement->fetchAll();
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function financeInvoices(int $year): array
+    {
+        $statement = $this->pdo->prepare("SELECT i.id,i.business_id,i.fiscal_year,i.invoice_number,i.amount,i.issued_on,i.due_on,
+                a.NRBIZ registration_number,a.Emri legal_name,COALESCE(SUM(p.amount),0) paid_amount,
+                CASE WHEN i.amount-COALESCE(SUM(p.amount),0)>0 THEN i.amount-COALESCE(SUM(p.amount),0) ELSE 0 END outstanding
+            FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id
+            LEFT JOIN dbo.business_invoice_payments p ON p.invoice_id=i.id WHERE i.fiscal_year=:year
+            GROUP BY i.id,i.business_id,i.fiscal_year,i.invoice_number,i.amount,i.issued_on,i.due_on,a.NRBIZ,a.Emri
+            ORDER BY i.issued_on DESC,i.id DESC");
+        $statement->execute(['year'=>$year]);
+        return $statement->fetchAll();
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function payableInvoices(): array
+    {
+        return $this->pdo->query("SELECT TOP (200) i.id,i.invoice_number,i.amount-COALESCE(SUM(p.amount),0) outstanding,a.NRBIZ registration_number,a.Emri legal_name
+            FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id
+            LEFT JOIN dbo.business_invoice_payments p ON p.invoice_id=i.id
+            GROUP BY i.id,i.invoice_number,i.amount,a.NRBIZ,a.Emri
+            HAVING i.amount-COALESCE(SUM(p.amount),0)>0 ORDER BY i.due_on,i.issued_on,i.id")->fetchAll();
     }
 
     /** @param array<string,string> $filters @return array{0:string,1:array<string,string>} */
