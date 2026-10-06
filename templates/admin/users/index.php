@@ -21,10 +21,10 @@
 <section class="panel"><h2>Llogaritë (<?=count($accounts)?>)</h2>
     <div class="table-wrap"><table><thead><tr><th>Emri</th><th>Emaili</th><th>Roli</th><th>Statusi</th><th>Hyrja e fundit</th><th>Veprime</th></tr></thead><tbody>
     <?php foreach($accounts as $account):?><tr>
-        <td><?=e($account['full_name'])?><?=(int)$account['id']===$user['id']?' (ju)':''?></td>
-        <td><?=e($account['email'])?></td><td><?=e($roles[$account['role_code']] ?? $account['role_code'])?></td>
-        <td><span class="badge <?=(int)$account['is_active']===1?'ACTIVE':'DEACTIVATED'?>"><?=(int)$account['is_active']===1?'Aktiv':'Joaktiv'?></span></td>
-        <td><?=e($account['last_login_at'] ?? 'Ende pa hyrje')?></td>
-        <td><a class="button secondary" href="<?=e(app_url('/admin/users/index.php?id='.(int)$account['id']))?>">Ndrysho</a></td>
+        <td data-label="Emri"><?=e($account['full_name'])?><?=(int)$account['id']===$user['id']?' (ju)':''?></td>
+        <td data-label="Emaili"><?=e($account['email'])?></td><td data-label="Roli"><?=e($roles[$account['role_code']] ?? $account['role_code'])?></td>
+        <td data-label="Statusi"><span class="badge <?=(int)$account['is_active']===1?'ACTIVE':'DEACTIVATED'?>"><?=(int)$account['is_active']===1?'Aktiv':'Joaktiv'?></span></td>
+        <td data-label="Hyrja e fundit"><?=e($account['last_login_at'] ?? 'Ende pa hyrje')?></td>
+        <td data-label="Veprimi"><a class="button secondary" href="<?=e(app_url('/admin/users/index.php?id='.(int)$account['id']))?>">Ndrysho</a></td>
     </tr><?php endforeach;?></tbody></table></div>
 </section>

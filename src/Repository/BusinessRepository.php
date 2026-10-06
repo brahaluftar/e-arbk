@@ -54,6 +54,28 @@ final class BusinessRepository
         return $this->pdo->query($sql)->fetch() ?: [];
     }
 
+    /** @return array{estimated_income:string|float|int,priced_businesses:int|string,unpriced_businesses:int|string} */
+    public function financialDashboard(): array
+    {
+        $sql = "WITH active_businesses AS (
+            SELECT a.REGULATION_ID,
+                COALESCE(
+                    TRY_CONVERT(decimal(19,2), a.tarifa_me_lirim),
+                    TRY_CONVERT(decimal(19,2), a.NACE_REG_TARIFF),
+                    TRY_CONVERT(decimal(19,2), x.tariff_snapshot)
+                ) AS estimated_tariff
+            FROM dbo.ARBK_LIST a
+            LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID
+            LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL
+            WHERE COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END)='ACTIVE'
+        )
+        SELECT COALESCE(SUM(estimated_tariff),CONVERT(decimal(38,2),0)) estimated_income,
+            SUM(CASE WHEN estimated_tariff IS NOT NULL THEN 1 ELSE 0 END) priced_businesses,
+            SUM(CASE WHEN estimated_tariff IS NULL THEN 1 ELSE 0 END) unpriced_businesses
+        FROM active_businesses";
+        return $this->pdo->query($sql)->fetch() ?: ['estimated_income'=>0,'priced_businesses'=>0,'unpriced_businesses'=>0];
+    }
+
     /** @param array<string,string> $filters @return array{0:string,1:array<string,string>} */
     private function where(array $filters): array
     {

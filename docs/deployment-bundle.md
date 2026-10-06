@@ -99,6 +99,16 @@ sessions after an account password is reset.
 The local root `.env` is ignored by Git and is never packaged; the committed
 `.env.example` and `.env.production.example` are templates only.
 
+## Dashboard financial indicators
+
+The admin dashboard estimates potential tariff income for active businesses only.
+For each business it uses `tarifa_me_lirim`, then `NACE_REG_TARIFF`, then the
+active classification tariff snapshot. Businesses without any of those values are
+counted separately. These are indicative tariff values, not collected or accrued
+accounting income. The application does not currently store invoices or payments,
+so the invoiced, to-be-invoiced, and paid cards explicitly show that those amounts
+are not recorded; do not interpret them as zero balances.
+
 ## Data selection
 
 Full rows from `ARBK_LIST`, `ATK_LIST`, `NACE_LIST`, `app_users`,
