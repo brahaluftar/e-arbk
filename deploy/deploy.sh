@@ -4,7 +4,7 @@ umask 027
 
 BUNDLE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 APP_ROOT=/cloudclusters/arbk
-ENV_DIR=/cloudcluster/arbk-env
+ENV_DIR=/cloudclusters/arbk-env
 ENV_FILE="$ENV_DIR/.env"
 PHP_BIN=${PHP_BIN:-php}
 WEB_USER=${WEB_USER:-www-data}
@@ -30,7 +30,7 @@ Usage: bash deploy.sh COMMAND [--create-database]
 permission. Otherwise provision an empty database in CloudClusters first.
 
 Application: /cloudclusters/arbk
-Environment: /cloudcluster/arbk-env/.env
+Environment: /cloudclusters/arbk-env/.env
 PHP_BIN, WEB_USER and WEB_GROUP may be set in the shell. Default FPM socket in
 100-arbk.conf is /var/run/php/php8.1-fpm.sock. No default_site shortcut is modified.
 HELP
@@ -41,19 +41,31 @@ case "$COMMAND" in check|deploy|install|database-import|database-verify|migrate|
 if [[ -n "$CREATE_DATABASE" && "$COMMAND" != deploy && "$COMMAND" != database-import ]]; then die '--create-database is valid only with deploy/database-import.'; fi
 [[ -f "$BUNDLE/RELEASE" && -f "$BUNDLE/SHA256SUMS" ]] || die 'Run this script from the extracted deployment bundle.'
 VERSION=$(cat "$BUNDLE/RELEASE")
-[[ "$VERSION" =~ ^[0-9][A-Za-z0-9._-]*$ && "$VERSION" != *..* ]] || die 'Invalid release identifier.'
+[[ "$VERSION" =~ ^(code-)?[0-9][A-Za-z0-9._-]*$ && "$VERSION" != *..* ]] || die 'Invalid release identifier.'
+PACKAGE_TYPE=full
+if [[ -f "$BUNDLE/PACKAGE-TYPE" ]]; then
+    [[ "$(cat "$BUNDLE/PACKAGE-TYPE")" == code-only && ! -d "$BUNDLE/database" ]] || die 'Invalid code-only package contents.'
+    PACKAGE_TYPE=code-only
+fi
+if [[ "$PACKAGE_TYPE" == full && "$VERSION" == code-* ]]; then die 'Full package has an invalid release identifier.'; fi
+if [[ "$PACKAGE_TYPE" == code-only && "$VERSION" != code-* ]]; then die 'Code-only package has an invalid release identifier.'; fi
 RELEASE="$APP_ROOT/releases/$VERSION"
 export ARBK_ENV_FILE="$ENV_FILE"
 
 check_package() {
     (cd "$BUNDLE" && sha256sum --check --quiet SHA256SUMS)
-    "$PHP_BIN" "$BUNDLE/app/bin/database-transfer.php" check "$BUNDLE/database"
+    if [[ "$PACKAGE_TYPE" == full ]]; then
+        "$PHP_BIN" "$BUNDLE/app/bin/database-transfer.php" check "$BUNDLE/database"
+    fi
 }
 check_environment() {
     [[ -f "$ENV_FILE" && -r "$ENV_FILE" ]] || die "Upload production settings to $ENV_FILE before deployment."
     "$PHP_BIN" "$BUNDLE/app/bin/deployment-check.php"
 }
 if [[ "$COMMAND" == check ]]; then check_package; check_environment; exit; fi
+if [[ "$PACKAGE_TYPE" == code-only && ( "$COMMAND" == database-import || "$COMMAND" == database-verify || -n "$CREATE_DATABASE" ) ]]; then
+    die 'Code-only releases cannot import or verify database snapshots.'
+fi
 
 mkdir -p "$APP_ROOT"
 [[ "$(readlink -f "$APP_ROOT")" == "$APP_ROOT" ]] || die 'Application root must be its own directory, not a shortcut to another site.'
@@ -96,12 +108,14 @@ stage() {
         find "$staging" -type f -exec chmod 644 {} +
         mv "$staging" "$RELEASE"
     fi
-    for source in "$BUNDLE"/database/files/*.xlsx; do
-        [[ -f "$source" ]] || continue
-        local target="$APP_ROOT/shared/imports/$(basename "$source")"
-        [[ ! -L "$target" ]] || die 'Refusing an import workbook symlink.'
-        if [[ -e "$target" ]]; then cmp -s "$source" "$target" || die 'Existing workbook differs from packaged file.'; else cp "$source" "$target"; fi
-    done
+    if [[ "$PACKAGE_TYPE" == full ]]; then
+        for source in "$BUNDLE"/database/files/*.xlsx; do
+            [[ -f "$source" ]] || continue
+            local target="$APP_ROOT/shared/imports/$(basename "$source")"
+            [[ ! -L "$target" ]] || die 'Refusing an import workbook symlink.'
+            if [[ -e "$target" ]]; then cmp -s "$source" "$target" || die 'Existing workbook differs from packaged file.'; else cp "$source" "$target"; fi
+        done
+    fi
     chmod 755 "$APP_ROOT" "$APP_ROOT/releases" "$APP_ROOT/shared"
     chmod 770 "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log"
     find "$APP_ROOT/shared/imports" -maxdepth 1 -type f -exec chmod 660 {} +
@@ -177,5 +191,10 @@ case "$COMMAND" in
     migrate) migrate;;
     activate) activate;;
     apache) apache;;
-    deploy) stage; import_database; migrate; activate;;
+    deploy)
+        stage
+        if [[ "$PACKAGE_TYPE" == full ]]; then import_database; fi
+        migrate
+        activate
+        ;;
 esac

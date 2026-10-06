@@ -11,8 +11,8 @@ shift
 [[ -f "$ARCHIVE" && -f "$ARCHIVE.sha256" ]] || { echo 'Upload both the ZIP and its .sha256 file.' >&2; exit 1; }
 ARCHIVE=$(readlink -f "$ARCHIVE")
 NAME=$(basename "$ARCHIVE")
-[[ "$NAME" =~ ^e-arbk-([0-9][A-Za-z0-9._-]*)\.zip$ ]] || { echo 'Unexpected package name.' >&2; exit 1; }
-VERSION=${BASH_REMATCH[1]}
+[[ "$NAME" =~ ^e-arbk-(code-)?([0-9][A-Za-z0-9._-]*)\.zip$ ]] || { echo 'Unexpected package name.' >&2; exit 1; }
+VERSION="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
 [[ "$VERSION" != *..* ]] || exit 1
 EXPECTED=$(awk 'NR==1 {print $1}' "$ARCHIVE.sha256")
 ACTUAL=$(sha256sum "$ARCHIVE" | awk '{print $1}')

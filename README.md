@@ -18,15 +18,20 @@ for setup, shared folders, and machine-specific overrides.
 
 For production, use `public/` as the website document root and follow [docs/production-deployment.md](docs/production-deployment.md).
 
-Production environment settings live in `/cloudcluster/arbk-env/.env`, outside
+Production environment settings live in `/cloudclusters/arbk-env/.env`, outside
 the application directory. The loader automatically uses this file when its
 directory exists; local development can continue using the project-root `.env`.
 
-For the packaged application and fresh SQL Server schema/data deployment, use
-[the deployment bundle instructions](docs/deployment-bundle.md). The shell launcher
-installs to `/cloudclusters/arbk` and provides an explicit `database-import` command.
+For a fresh SQL Server schema/data deployment or a code-only release to an existing
+database, use [the deployment bundle instructions](docs/deployment-bundle.md). The
+shell launcher installs to `/cloudclusters/arbk`; code-only releases do not carry
+database snapshots and apply pending migrations to the configured database.
 
 Production operations include database-backed login throttling, `/health.php`, strict HTTPS/cookie configuration, `bin/preflight-production.php`, non-overlapping scheduled synchronization, and managed or SQL Server backup modes.
+
+Password resets are sent through Microsoft Graph. Configure the Graph app-only
+`Mail.Send` settings in the external production `.env`; see
+[password reset deployment notes](docs/deployment-bundle.md#password-reset-email).
 
 ## Excel imports
 

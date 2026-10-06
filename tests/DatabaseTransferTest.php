@@ -27,7 +27,8 @@ final class DatabaseTransferTest extends TestCase
 
     public function testAcceptsIntactTransferFiles(): void
     {
-        self::assertCount(11,(new DatabaseTransfer())->manifest($this->directory)['tables']);
+        self::assertCount(12,(new DatabaseTransfer())->manifest($this->directory)['tables']);
+        self::assertContains('password_reset_tokens', DatabaseTransfer::TABLES);
     }
 
     public function testRejectsChangedDataBeforeDatabaseAccess(): void

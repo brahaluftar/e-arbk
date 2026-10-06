@@ -10,7 +10,7 @@ use Throwable;
 /** Logical, fresh-database transfer of the application's SQL Server objects. */
 final class DatabaseTransfer
 {
-    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits'];
+    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens'];
     private const JSON = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
     public static function quote(string $name): string { return '['.str_replace(']',']]', $name).']'; }
@@ -28,7 +28,7 @@ final class DatabaseTransfer
             if ((int)$pdo->query("SELECT COUNT(*) FROM dbo.business_import_runs WHERE status IN('QUEUED','PROCESSING')")->fetchColumn() !== 0) throw new RuntimeException('Finish queued/processing imports before taking a deployment snapshot.');
             $manifest = ['format'=>1,'created_at'=>gmdate(DATE_ATOM),'minimum_sql_compatibility'=>130,
                 'collation'=>(string)$pdo->query("SELECT CONVERT(varchar(128),DATABASEPROPERTYEX(DB_NAME(),'Collation'))")->fetchColumn(),
-                'excluded'=>['dbo.arbk','dbo.atk2','dbo.BizList1','legacy stored procedures','login_rate_limits rows','rowversion values'],
+                'excluded'=>['dbo.arbk','dbo.atk2','dbo.BizList1','legacy stored procedures','login_rate_limits rows','password_reset_tokens rows','rowversion values'],
                 'before'=>[], 'after'=>[], 'tables'=>[], 'files'=>[]];
             $sequence=$pdo->query("SELECT CONVERT(bigint,current_value) current_value,CONVERT(bigint,increment) increment FROM sys.sequences WHERE name='arbk_regulation_id_seq' AND schema_id=SCHEMA_ID('dbo')")->fetch();
             if (!$sequence || (int)$sequence['increment'] !== 1) throw new RuntimeException('Expected ARBK ID sequence is missing or unsupported.');
@@ -44,7 +44,7 @@ final class DatabaseTransfer
                 if ($handle===false) throw new RuntimeException('Cannot create data file.');
                 $hash=hash_init('sha256');$count=0;
                 try {
-                    if ($table !== 'login_rate_limits') {
+                    if (!in_array($table, ['login_rate_limits', 'password_reset_tokens'], true)) {
                         $statement=$pdo->query($metadata['select']);
                         while ($row=$statement->fetch(PDO::FETCH_NUM)) {
                             $line=json_encode($row,self::JSON)."\n";

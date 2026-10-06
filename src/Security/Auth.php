@@ -14,20 +14,27 @@ final class Auth
     {
         $id = $_SESSION['_auth_user_id'] ?? null;
         if (!is_int($id) && !ctype_digit((string) $id)) return null;
-        $statement = $this->pdo->prepare("SELECT id,email,full_name,role_code FROM dbo.app_users WHERE id=:id AND is_active=1");
+        $statement = $this->pdo->prepare("SELECT id,email,full_name,role_code,auth_version FROM dbo.app_users WHERE id=:id AND is_active=1");
         $statement->execute(['id' => (int) $id]);
         $row = $statement->fetch();
-        return is_array($row) ? ['id'=>(int)$row['id'],'email'=>(string)$row['email'],'full_name'=>(string)$row['full_name'],'role_code'=>(string)$row['role_code']] : null;
+        if (!is_array($row)) return null;
+        if ((int) ($_SESSION['_auth_user_version'] ?? 0) !== (int) $row['auth_version']) {
+            unset($_SESSION['_auth_user_id'], $_SESSION['_auth_user_version']);
+            if (session_status() === PHP_SESSION_ACTIVE) session_regenerate_id(true);
+            return null;
+        }
+        return ['id'=>(int)$row['id'],'email'=>(string)$row['email'],'full_name'=>(string)$row['full_name'],'role_code'=>(string)$row['role_code']];
     }
 
     public function login(string $email, string $password): bool
     {
-        $statement = $this->pdo->prepare("SELECT id,password_hash FROM dbo.app_users WHERE normalized_email=:email AND is_active=1");
+        $statement = $this->pdo->prepare("SELECT id,password_hash,auth_version FROM dbo.app_users WHERE normalized_email=:email AND is_active=1");
         $statement->execute(['email' => mb_strtoupper(trim($email), 'UTF-8')]);
         $row = $statement->fetch();
         if (!is_array($row) || !password_verify($password, (string) $row['password_hash'])) return false;
         session_regenerate_id(true);
         $_SESSION['_auth_user_id'] = (int) $row['id'];
+        $_SESSION['_auth_user_version'] = (int) $row['auth_version'];
         $this->pdo->prepare('UPDATE dbo.app_users SET last_login_at=SYSUTCDATETIME() WHERE id=:id')->execute(['id'=>(int)$row['id']]);
         return true;
     }

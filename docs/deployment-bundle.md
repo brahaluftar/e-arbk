@@ -4,7 +4,7 @@
 
 - Application root: `/cloudclusters/arbk`.
 - Public document root: `/cloudclusters/arbk/public`.
-- Protected environment file: `/cloudcluster/arbk-env/.env` (singular `cloudcluster`).
+- Protected environment file: `/cloudclusters/arbk-env/.env`.
 - Private extracted package: `/cloudclusters/arbk-deployments/VERSION`.
 - Persistent workbooks/logs: `/cloudclusters/arbk/shared/imports` and `shared/log`.
 - Application releases: `/cloudclusters/arbk/releases/VERSION`; `current` selects the active release and `public` points at `current/public`.
@@ -16,7 +16,7 @@ Passwords are preserved as hashes, so existing application logins continue to wo
 
 Before first deployment:
 
-1. Create `/cloudcluster/arbk-env` and upload the completed production environment
+1. Create `/cloudclusters/arbk-env` and upload the completed production environment
    configuration as `.env`. A workstation file such as `arbk-prduction.env` must
    be renamed to `.env` on the server. It is deliberately not bundled.
 2. Use a dedicated ARBK SQL database and SQL login with schema/data creation
@@ -27,6 +27,7 @@ Before first deployment:
 3. Enable PHP 8.1+ with `pdo_sqlsrv`, `mbstring`, `openssl`, `zip`, `xmlreader`,
    `xmlwriter`, `simplexml`, and `zlib` for both CLI and PHP-FPM. Production Composer
    autoload files are bundled, so Composer/network access is not needed on the server.
+   Password reset requires outbound HTTPS access to Microsoft identity and Graph endpoints.
 4. Run from the CloudClusters root terminal. The script defaults to FPM account/group
    `www-data`; set `WEB_USER` and `WEB_GROUP` if your pool uses different accounts.
    It gives that group read access to the protected environment file and ownership
@@ -60,7 +61,7 @@ bash /cloudclusters/deploy-arbk.sh /cloudclusters/e-arbk-VERSION.zip activate
 ```
 
 `database-import` is the explicit schema/data transfer command. It checks every
-transfer file's SHA-256, creates all 11 application tables, sequence, defaults,
+transfer file's SHA-256, creates all 12 application tables, sequence, defaults,
 indexes, primary/unique/foreign keys, check constraints and `v_business_master`.
 Rows are imported in batches using typed OPENJSON and a single transaction.
 IDs, GUIDs, Unicode, decimals, floats, timestamps and password hashes are retained;
@@ -73,6 +74,30 @@ deletes, merges into, or drops an existing production database.
 `database-verify` compares against the initial snapshot; it is expected to report
 differences after legitimate user edits, logins, imports or scheduled jobs.
 `activate` runs production preflight and then switches only ARBK's current release.
+
+## Password reset email
+
+The login page includes a password-reset request. The app returns the same confirmation
+whether or not an active account uses the submitted address. Reset tokens are random,
+stored only as SHA-256 hashes, expire after `PASSWORD_RESET_TTL_SECONDS`, and are
+single-use. Requests are rate-limited by email and IP using the configured login limits.
+
+Register an application in Microsoft Entra ID and grant the Microsoft Graph
+**application** permission `Mail.Send`, with tenant admin consent. Restrict the app
+to the approved sender mailbox using your Exchange application access policy or
+application RBAC. Set `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, and
+`GRAPH_CLIENT_SECRET` in `/cloudclusters/arbk-env/.env`; keep the client secret out
+of Git and deployment ZIPs. `GRAPH_SENDER_MAILBOX` defaults to
+`no-reply@kryeqyteti.net`. `GRAPH_BASE_URL` is restricted to Microsoft Graph;
+the base URL and timeout have safe defaults. Full snapshots include reset-token
+table schema but never transfer active reset tokens.
+
+The code-only release includes migrations `0013_password_reset_tokens.sql` and
+`0014_user_auth_version.sql`. Run the usual `deploy` or `migrate` command to install
+them before enabling password resets; the auth-version migration revokes existing
+sessions after an account password is reset.
+The local root `.env` is ignored by Git and is never packaged; the committed
+`.env.example` and `.env.production.example` are templates only.
 
 ## Data selection
 
@@ -90,9 +115,9 @@ full archival backup of every historical database object. SQL Server logins,
 server permissions, jobs and linked servers are not transferred.
 
 The schema/data snapshot reflects the installed migrations and the actual legacy
-master table definitions. All 12 migration records are included, so `migrate`
-does not attempt to add columns that are already present. Future migrations run
-normally. SQL Server 2016+ and database compatibility level 130+ are required.
+master table definitions. Migration records are included, so `migrate` skips
+changes already applied and runs new migrations normally. SQL Server 2016+ and
+database compatibility level 130+ are required.
 
 ## Apache and the existing default site
 
@@ -139,6 +164,19 @@ before doing so. Keep the previous release and a database backup before upgrades
 php bin/database-transfer.php export dist/database-snapshot-NEW
 powershell -ExecutionPolicy Bypass -File deploy/build-package.ps1 -Version VERSION -Snapshot dist/database-snapshot-NEW
 ```
+
+For a code-only release when production already has the database, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/build-code-package.ps1 -Version VERSION
+```
+
+This creates `dist/e-arbk-code-VERSION.zip` without a database snapshot or import
+workbooks. The application migration SQL files are retained so `migrate` can apply
+schema changes to the existing production database. Upload the ZIP, its `.sha256`
+file and `dist/deploy-arbk.sh`; then run the `deploy` command to install the code,
+apply pending migrations and activate the release. The deployment environment file
+remains external at `/cloudclusters/arbk-env/.env`.
 
 The exporter briefly holds shared locks over the selected application tables to
 produce a consistent snapshot without changing source data/schema. It refuses

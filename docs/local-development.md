@@ -69,7 +69,7 @@ change. Do not run Git operations concurrently against the same shared checkout.
 
 ## Production remains separate
 
-CloudClusters uses `/cloudcluster/arbk-env/.env` and application root
+CloudClusters uses `/cloudclusters/arbk-env/.env` and application root
 `/cloudclusters/arbk`. Its external file overrides these workstation defaults.
 Deployment archives, real environment files, `vendor/`, uploaded XLSX files and
 database snapshots remain outside Git; copy private deployment artifacts through

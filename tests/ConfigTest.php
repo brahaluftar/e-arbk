@@ -28,6 +28,21 @@ final class ConfigTest extends TestCase
         putenv($this->previousValue === false ? 'ARBK_CONFIG_TEST_VALUE' : 'ARBK_CONFIG_TEST_VALUE='.$this->previousValue);
     }
 
+    public function testProductionEnvironmentDirectory(): void
+    {
+        self::assertSame('/cloudclusters/arbk-env',Config::PRODUCTION_ENV_DIRECTORY);
+    }
+
+    public function testGraphAndResetDefaultsAreAvailable(): void
+    {
+        $config=Config::load($this->directory,['GRAPH_TENANT_ID'=>'','GRAPH_CLIENT_ID'=>'','GRAPH_CLIENT_SECRET'=>'','GRAPH_SENDER_MAILBOX'=>'no-reply@kryeqyteti.net','GRAPH_BASE_URL'=>'https://graph.microsoft.com/v1.0','GRAPH_TIMEOUT_SECONDS'=>'15','PASSWORD_RESET_TTL_SECONDS'=>'1800']);
+        self::assertSame('',$config->string('GRAPH_TENANT_ID'));
+        self::assertSame('no-reply@kryeqyteti.net',$config->string('GRAPH_SENDER_MAILBOX'));
+        self::assertSame('https://graph.microsoft.com/v1.0',$config->string('GRAPH_BASE_URL'));
+        self::assertSame(15,$config->int('GRAPH_TIMEOUT_SECONDS'));
+        self::assertSame(1800,$config->int('PASSWORD_RESET_TTL_SECONDS'));
+    }
+
     public function testLocalDevelopmentFallback(): void
     {
         if (is_dir(Config::PRODUCTION_ENV_DIRECTORY)) self::markTestSkipped('Production directory is present.');

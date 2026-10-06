@@ -5,7 +5,7 @@ namespace App\Support;
 
 final class Config
 {
-    public const PRODUCTION_ENV_DIRECTORY = '/cloudcluster/arbk-env';
+    public const PRODUCTION_ENV_DIRECTORY = '/cloudclusters/arbk-env';
 
     /** @param array<string,string> $values */
     private function __construct(private array $values) {}
