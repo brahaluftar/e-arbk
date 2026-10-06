@@ -5,6 +5,8 @@ namespace App\Support;
 
 final class Config
 {
+    public const PRODUCTION_ENV_DIRECTORY = '/cloudcluster/arbk-env';
+
     /** @param array<string,string> $values */
     private function __construct(private array $values) {}
 
@@ -12,9 +14,23 @@ final class Config
     public static function load(string $root, array $defaults): self
     {
         $values = $defaults;
-        $file = $root . DIRECTORY_SEPARATOR . '.env';
+        $explicitFile = getenv('ARBK_ENV_FILE');
+        $external = is_string($explicitFile) && trim($explicitFile) !== '';
+        if ($external) {
+            $file = $explicitFile;
+        } elseif (is_dir(self::PRODUCTION_ENV_DIRECTORY)) {
+            $file = self::PRODUCTION_ENV_DIRECTORY . '/.env';
+            $external = true;
+        } else {
+            $file = $root . DIRECTORY_SEPARATOR . '.env';
+        }
+        if ($external && (!is_file($file) || !is_readable($file))) {
+            throw new \RuntimeException('The external ARBK environment file is missing or unreadable.');
+        }
         if (is_file($file)) {
-            foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if ($lines === false) throw new \RuntimeException('Cannot read the ARBK environment file.');
+            foreach ($lines as $line) {
                 $line = trim($line);
                 if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
                 [$key, $value] = explode('=', $line, 2);

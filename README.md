@@ -11,7 +11,20 @@ Framework-free PHP 8.1+ module for ARBK/ATK business status normalization and mu
 5. Run `php bin/sync-atk.php`, `php bin/sync-tariff-mappings.php`, then `php bin/classify-nace.php` after confirming `nace_list` is populated.
 6. Open `http://localhost/arbk/auth/login.php`.
 
+The development defaults work on both **ELI** and **ALTERNATOR** using
+`localhost\sql2025`, database `ARBK`, and Windows authentication. No host-name
+edit is needed when switching computers. See [working on two computers](docs/local-development.md)
+for setup, shared folders, and machine-specific overrides.
+
 For production, use `public/` as the website document root and follow [docs/production-deployment.md](docs/production-deployment.md).
+
+Production environment settings live in `/cloudcluster/arbk-env/.env`, outside
+the application directory. The loader automatically uses this file when its
+directory exists; local development can continue using the project-root `.env`.
+
+For the packaged application and fresh SQL Server schema/data deployment, use
+[the deployment bundle instructions](docs/deployment-bundle.md). The shell launcher
+installs to `/cloudclusters/arbk` and provides an explicit `database-import` command.
 
 Production operations include database-backed login throttling, `/health.php`, strict HTTPS/cookie configuration, `bin/preflight-production.php`, non-overlapping scheduled synchronization, and managed or SQL Server backup modes.
 
@@ -32,3 +45,11 @@ The migration is additive and does not add foreign keys to legacy master tables.
 - `READ_ONLY`: listing and details only.
 
 No initial password is stored in source. Use the CLI command to create accounts.
+
+Administrators can also use **Përdoruesit** (`/admin/users/index.php`) to create
+official, read-only, or administrator accounts, edit names/emails/roles, activate
+or deactivate accounts, and set a new password. Passwords require at least 12
+characters (maximum 72 bytes); leaving both password fields empty while editing
+preserves the existing password. Changes are audited without storing passwords
+in audit records. Administrators cannot deactivate or demote their own account.
+This screen uses the existing `app_users` schema and requires no new migration.

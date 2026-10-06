@@ -10,7 +10,8 @@ return [
     'APP_KEY' => '',
     'FORCE_HTTPS' => 'false',
     'TRUST_PROXY_HEADERS' => 'false',
-    'DB_HOST' => 'alternator\\sql2025',
+    // Both workstations use their own local SQL2025 instance.
+    'DB_HOST' => 'localhost\\sql2025',
     'DB_NAME' => 'ARBK',
     'DB_USER' => '',
     'DB_PASSWORD' => '',
