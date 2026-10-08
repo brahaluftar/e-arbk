@@ -20,6 +20,8 @@ foreach ($file in @('bootstrap.php','index.php','composer.json','composer.lock',
 }
 New-Item -ItemType Directory -Path (Join-Path $appPath 'var\imports') -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $appPath 'var\imports\.gitkeep'), '')
+New-Item -ItemType Directory -Path (Join-Path $appPath 'var\documents') -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $appPath 'var\documents\.gitkeep'), '')
 New-Item -ItemType Directory -Path (Join-Path $appPath 'docs') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $rootPath 'docs\production-deployment.md') -Destination (Join-Path $appPath 'docs')
 Copy-Item -LiteralPath (Join-Path $rootPath 'docs\deployment-bundle.md') -Destination (Join-Path $appPath 'docs')
@@ -35,10 +37,10 @@ foreach ($entry in $overrides.GetEnumerator()) {
     $defaultsText = [regex]::Replace($defaultsText,$pattern,$replacement)
 }
 [System.IO.File]::WriteAllText($defaultPath,$defaultsText,(New-Object System.Text.UTF8Encoding($false)))
-& composer install --working-dir $appPath --no-dev --prefer-dist --no-interaction --no-progress --classmap-authoritative
+& composer install --working-dir $appPath --no-dev --prefer-dist --no-interaction --no-progress --classmap-authoritative --ignore-platform-req=ext-gd
 if ($LASTEXITCODE -ne 0) { throw 'Production dependency installation failed.' }
 Copy-Item -LiteralPath $snapshotPath -Destination (Join-Path $bundlePath 'database') -Recurse
-foreach ($file in @('deploy.sh','100-arbk.conf')) {
+foreach ($file in @('deploy.sh','100-arbk.conf','manage-apache-vhosts.awk')) {
     $text = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $file)).Replace("`r`n","`n")
     [System.IO.File]::WriteAllText((Join-Path $bundlePath $file),$text,(New-Object System.Text.UTF8Encoding($false)))
 }

@@ -1,0 +1,4 @@
+<?php
+declare(strict_types=1);
+$app=require dirname(__DIR__,2).'/bootstrap.php';$user=$app['auth']->requireUser();$id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);$municipal=in_array($user['role_code'],['ADMIN','OFFICIAL','READ_ONLY'],true);$businessAccess=$user['role_code']==='BUSINESS'&&$id&&(new App\Repository\PortalRepository($app['pdo']))->userCanAccessInvoice($user['id'],(int)$id);if(!$id||(!$municipal&&!$businessAccess)){http_response_code(403);exit('Access denied.');}
+$store=new App\Document\DocumentStore(dirname(__DIR__,2).'/var/documents');$key=(new App\Billing\InvoiceDocumentService($app['pdo'],$app['config'],$store))->ensure($id);$path=$store->path($key);header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="fatura-'.$id.'.pdf"');header('Content-Length: '.filesize($path));header('Cache-Control: private, no-store');readfile($path);

@@ -36,7 +36,7 @@ final class BusinessRepository
     {
         [$where,$params]=$this->where($filters);
         $candidateJoin="LEFT JOIN (SELECT NACE_CODE,COUNT(*) candidate_count FROM dbo.NACE_LIST WHERE NACE_CODE IS NOT NULL GROUP BY NACE_CODE) c ON c.NACE_CODE=a.NACE_CODE_REG";
-        $sql="SELECT a.REGULATION_ID,a.NRBIZ,a.Emri,a.EMRI_TREGTAR,a.Lloji,a.Qyteti,a.Statusi,a.Pasiv,a.date_pasivizimit,a.NACE_CODE_REG,a.NACEPERSHKRIMI,a.SEKTORI,a.NR_PUNETOREVE,a.MADHESIA,a.TOTAL_M,a.TOTAL_F,a.Viti,a.MUAJI,a.DATA_SHUARJES,a.ATK_MBYLLUR,a.ATK_DATEMBYLLJE,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) normalized_atk_status,a.NACE_CODE_TARIFF,a.nace_veprimtaria_tariff,a.NACE_REG_TARIFF,x.nace_category,x.tariff_snapshot,x.assignment_method,a.pronare_grua,a.pronesia_grua,a.pronar_veteran,a.perqindja_veteran,a.tarifa_me_lirim FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID";
+        $sql="SELECT a.REGULATION_ID,a.NRBIZ,a.Emri,a.EMRI_TREGTAR,a.Lloji,a.Qyteti,a.Statusi,a.Pasiv,a.date_pasivizimit,a.NACE_CODE_REG,a.NACEPERSHKRIMI,a.SEKTORI,a.NR_PUNETOREVE,a.MADHESIA,a.TOTAL_M,a.TOTAL_F,a.Viti,a.MUAJI,a.DATA_SHUARJES,a.ATK_MBYLLUR,a.ATK_DATEMBYLLJE,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) normalized_atk_status,a.NACE_CODE_TARIFF,a.nace_veprimtaria_tariff,a.NACE_REG_TARIFF,x.nace_category,x.tariff_snapshot,x.assignment_method,u.full_name assigned_by,a.pronare_grua,a.pronesia_grua,a.pronar_veteran,a.perqindja_veteran,a.tarifa_me_lirim FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL LEFT JOIN dbo.app_users u ON u.id=x.assigned_by_user_id $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID";
         $statement=$this->pdo->prepare($sql);$statement->execute($params);return $statement;
     }
 
@@ -70,17 +70,23 @@ final class BusinessRepository
             LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL
             WHERE COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END)='ACTIVE'
                 AND (a.Viti IS NULL OR TRY_CONVERT(int,a.Viti)<=:year)
+        ), invoice_by_business AS (
+            SELECT business_id,SUM(amount) invoiced_amount
+            FROM dbo.business_invoices
+            WHERE fiscal_year=:estimate_invoice_year
+            GROUP BY business_id
         )
         SELECT COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),CONVERT(decimal(38,2),0)) estimated_income,
-            CASE WHEN COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),0)-COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:to_invoice_year),0)>=0 THEN COALESCE((SELECT SUM(estimated_tariff) FROM annual_estimate),0)-COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:to_invoice_year_2),0) ELSE 0 END to_be_invoiced,
+            COALESCE(SUM(CASE WHEN e.estimated_tariff>COALESCE(i.invoiced_amount,0) THEN e.estimated_tariff-COALESCE(i.invoiced_amount,0) ELSE 0 END),CONVERT(decimal(38,2),0)) to_be_invoiced,
             COALESCE((SELECT SUM(amount) FROM dbo.business_invoices WHERE fiscal_year=:invoice_year_2),CONVERT(decimal(38,2),0)) invoiced,
             COALESCE((SELECT SUM(p.amount) FROM dbo.business_invoice_payments p WHERE YEAR(p.paid_on)=:paid_year),CONVERT(decimal(38,2),0)) paid,
             COALESCE((SELECT SUM(CASE WHEN i.amount-COALESCE(paid.amount,0)>0 THEN i.amount-COALESCE(paid.amount,0) ELSE 0 END) FROM dbo.business_invoices i OUTER APPLY(SELECT SUM(p.amount) amount FROM dbo.business_invoice_payments p WHERE p.invoice_id=i.id) paid WHERE i.fiscal_year=:invoice_year_3),CONVERT(decimal(38,2),0)) to_be_paid,
             SUM(CASE WHEN estimated_tariff IS NOT NULL THEN 1 ELSE 0 END) priced_businesses,
             SUM(CASE WHEN estimated_tariff IS NULL THEN 1 ELSE 0 END) unpriced_businesses
-        FROM annual_estimate";
+        FROM annual_estimate e
+        LEFT JOIN invoice_by_business i ON i.business_id=e.REGULATION_ID";
         $statement = $this->pdo->prepare($sql);
-        $statement->execute(['year'=>$year,'to_invoice_year'=>$year,'to_invoice_year_2'=>$year,'invoice_year_2'=>$year,'paid_year'=>$year,'invoice_year_3'=>$year]);
+        $statement->execute(['year'=>$year,'estimate_invoice_year'=>$year,'invoice_year_2'=>$year,'paid_year'=>$year,'invoice_year_3'=>$year]);
         $totals = $statement->fetch() ?: [];
         $monthlyStatement = $this->pdo->prepare("WITH month_list AS (
             SELECT month FROM (VALUES(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12)) months(month)
@@ -143,6 +149,16 @@ final class BusinessRepository
         return $statement->fetchAll();
     }
 
+    /** @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int} */
+    public function financeInvoicesPage(int $year,int $page,int $perPage,string $query='',?int $jobId=null):array
+    {
+        $page=max(1,$page);$perPage=in_array($perPage,[20,30,40,50,100],true)?$perPage:30;$where=['i.fiscal_year=:year'];$params=['year'=>$year];
+        if($query!==''){$where[]='(i.invoice_number LIKE :search_number OR i.uniref LIKE :search_uniref OR a.Emri LIKE :search_name OR a.NRBIZ LIKE :search_registration)';$value='%'.$query.'%';$params['search_number']=$value;$params['search_uniref']=$value;$params['search_name']=$value;$params['search_registration']=$value;}
+        if($jobId!==null&&$jobId>0){$where[]='EXISTS(SELECT 1 FROM dbo.annual_invoice_job_items ji WHERE ji.job_id=:job AND ji.invoice_id=i.id)';$params['job']=$jobId;}
+        $sqlWhere=implode(' AND ',$where);$count=$this->pdo->prepare("SELECT COUNT_BIG(*) FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id WHERE $sqlWhere");$count->execute($params);$total=(int)$count->fetchColumn();$pages=max(1,(int)ceil($total/$perPage));$page=min($page,$pages);$offset=($page-1)*$perPage;
+        $sql="SELECT i.id,i.invoice_number,i.uniref,i.amount,i.currency,i.issued_on,i.due_on,i.status_code,i.emailed_at,a.NRBIZ registration_number,a.Emri legal_name,COALESCE(p.paid_amount,0) paid_amount,CASE WHEN i.amount-COALESCE(p.paid_amount,0)>0 THEN i.amount-COALESCE(p.paid_amount,0) ELSE 0 END outstanding FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id OUTER APPLY(SELECT SUM(bp.amount) paid_amount FROM dbo.business_invoice_payments bp WHERE bp.invoice_id=i.id)p WHERE $sqlWhere ORDER BY i.issued_on DESC,i.id DESC OFFSET $offset ROWS FETCH NEXT $perPage ROWS ONLY";$q=$this->pdo->prepare($sql);$q->execute($params);return ['rows'=>$q->fetchAll(),'total'=>$total,'page'=>$page,'pages'=>$pages,'per_page'=>$perPage];
+    }
+
     /** @return list<array<string,mixed>> */
     public function payableInvoices(): array
     {
@@ -167,6 +183,7 @@ final class BusinessRepository
         elseif($classification==='AUTO') $clauses[]="x.assignment_method='AUTO'";
         elseif($classification==='MANUAL') $clauses[]="x.assignment_method='MANUAL'";
         elseif($classification==='AMBIGUOUS') $clauses[]='x.id IS NULL AND c.candidate_count>1';
+        elseif($classification==='NO_RELATION') $clauses[]='COALESCE(c.candidate_count,0)=0';
         return [implode(' AND ',$clauses),$params];
     }
 }

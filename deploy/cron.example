@@ -1,6 +1,7 @@
 # Replace /var/www/e-arbk with the release path and confirm the PHP binary using `command -v php`.
 # Application synchronization: every 15 minutes, with an internal non-overlap lock.
 */15 * * * * cd /var/www/e-arbk && /usr/bin/php bin/run-scheduled.php >> var/log/scheduled.log 2>&1
+* * * * * cd /var/www/e-arbk && /usr/bin/flock -n var/annual-invoices.lock /usr/bin/php bin/process-annual-invoices.php 200 >> var/log/annual-invoices.log 2>&1
 
 # SQL Server backup mode only. Managed CloudClusters backups are configured in the control panel instead.
 15 2 * * * cd /var/www/e-arbk && /usr/bin/php bin/backup-database.php >> var/log/backup.log 2>&1

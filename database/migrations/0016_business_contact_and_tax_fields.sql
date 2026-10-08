@@ -1,0 +1,7 @@
+SET XACT_ABORT ON;
+GO
+ALTER TABLE dbo.ARBK_LIST ADD
+    NUMRI_FISKAL varchar(30) NULL,
+    ADRESA nvarchar(500) NULL,
+    EMAIL nvarchar(254) NULL;
+GO

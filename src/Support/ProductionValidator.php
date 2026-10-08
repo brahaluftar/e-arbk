@@ -15,6 +15,7 @@ final class ProductionValidator
         if ($config->bool('DB_TRUSTED_CONNECTION')) $errors[]='DB_TRUSTED_CONNECTION must be false on CloudClusters.';
         foreach(['DB_HOST','DB_NAME','DB_USER','DB_PASSWORD'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required.";
         foreach(['GRAPH_TENANT_ID','GRAPH_CLIENT_ID','GRAPH_CLIENT_SECRET'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required for password reset email.";
+        foreach(['MUNICIPALITY_NAME','MUNICIPALITY_ADDRESS','MUNICIPALITY_CONTACT','MUNICIPAL_BANK_ACCOUNT'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required for invoice and permit documents.";
         if (filter_var($config->string('GRAPH_SENDER_MAILBOX'),FILTER_VALIDATE_EMAIL)===false) $errors[]='GRAPH_SENDER_MAILBOX must be a valid email address.';
         if (parse_url($config->string('GRAPH_BASE_URL'),PHP_URL_SCHEME)!=='https' || strtolower((string)parse_url($config->string('GRAPH_BASE_URL'),PHP_URL_HOST))!=='graph.microsoft.com') $errors[]='GRAPH_BASE_URL must use https://graph.microsoft.com.';
         if ($config->int('GRAPH_TIMEOUT_SECONDS')<1 || $config->int('GRAPH_TIMEOUT_SECONDS')>60) $errors[]='GRAPH_TIMEOUT_SECONDS must be between 1 and 60.';

@@ -1,0 +1,4 @@
+<?php
+declare(strict_types=1);
+$app=require dirname(__DIR__,3).'/bootstrap.php';$user=$app['auth']->requireRole(['ADMIN','OFFICIAL']);if($_SERVER['REQUEST_METHOD']!=='POST'||!$app['csrf']->verify($_POST['_csrf']??null)){http_response_code(400);exit('Invalid request.');}
+try{(new App\Permitting\PermitService($app['pdo'],$app['config'],new App\Service\AuditLogger($app['pdo']),new App\Document\DocumentStore(dirname(__DIR__,3).'/var/documents')))->issue((int)($_POST['business_id']??0),(string)($_POST['valid_from']??''),(string)($_POST['valid_until']??''),$user['id']);flash('success','Leja e punës u gjenerua.');}catch(DomainException $e){flash('error',$e->getMessage());}catch(Throwable $e){error_log($e->__toString());flash('error','Leja nuk mund të gjenerohej.');}redirect('/admin/businesses/view.php?id='.(int)($_POST['business_id']??0));

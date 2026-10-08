@@ -144,10 +144,15 @@ After activating ARBK, enable its separate hostname with:
 bash /cloudclusters/deploy-arbk.sh /cloudclusters/e-arbk-VERSION.zip apache
 ```
 
-This command installs only `100-arbk.conf`, checks the PHP 8.1 FPM socket and Apache
-syntax, compares the existing default-vhost listing, then performs a graceful
-reload. It never repoints `/cloudclusters/default_site` or edits the existing
-e-aplikimet virtual host. A different pre-existing `100-arbk.conf` is refused.
+This command manages the ARBK block in CloudClusters' persistent
+`/cloudclusters/config/apache/default.conf`, checks the PHP 8.1 FPM socket and
+Apache syntax, then restarts Apache through Supervisor. It replaces the first
+ARBK block with the packaged canonical block, removes additional ARBK blocks or
+aliases, and preserves all non-ARBK virtual hosts and other file content. It keeps
+a backup and restores the master file if syntax validation or restart fails.
+`activate` restarts the `php-fpm` Supervisor service after switching releases to
+clear OPcache. Existing virtual hosts and `/cloudclusters/default_site` are
+preserved.
 
 Add `arbk.kryeqyteti.net` to the same CloudClusters application, configure DNS and
 its SSL certificate without changing the default domain. If TLS terminates at a
@@ -162,7 +167,12 @@ Schedule (using the same account with environment read/shared-directory write ac
 
 ```cron
 */15 * * * * cd /cloudclusters/arbk/current && /usr/bin/php bin/run-scheduled.php >> /cloudclusters/arbk/shared/log/scheduled.log 2>&1
+* * * * * cd /cloudclusters/arbk/current && /usr/bin/flock -n /cloudclusters/arbk/shared/annual-invoices.lock /usr/bin/php bin/process-annual-invoices.php 200 >> /cloudclusters/arbk/shared/log/annual-invoices.log 2>&1
 ```
+
+The annual-invoice worker processes resumable batches. The web request only queues
+the job, so closing the browser does not interrupt generation. To drain the queue
+immediately without waiting for cron, run `php bin/process-annual-invoices.php 200`.
 
 Do not start the scheduler until the initial snapshot verification is complete.
 Configure backups in CloudClusters separately; deployment is not a backup policy.

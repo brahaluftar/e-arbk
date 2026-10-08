@@ -9,6 +9,6 @@ $query = trim(is_string($_GET['q'] ?? null) ? $_GET['q'] : '');
 $repository = new App\Repository\BusinessRepository($app['pdo']);
 $financialStats = $repository->financialDashboard($year);
 $businesses = $repository->financeBusinesses($year, $query);
-$invoices = $repository->financeInvoices($year);
 $payableInvoices = $repository->payableInvoices();
-render('admin/finance/index', 'Financat', compact('financialStats','businesses','invoices','payableInvoices','query'));
+$annualJobs=$app['pdo']->query('SELECT TOP(20) * FROM dbo.annual_invoice_jobs ORDER BY id DESC')->fetchAll();
+render('admin/finance/index', 'Financat', compact('financialStats','businesses','payableInvoices','query','annualJobs'));

@@ -29,6 +29,10 @@ final class ProductionValidatorTest extends TestCase
             'GRAPH_BASE_URL' => 'https://graph.microsoft.com/v1.0',
             'GRAPH_TIMEOUT_SECONDS' => '15',
             'PASSWORD_RESET_TTL_SECONDS' => '1800',
+            'MUNICIPALITY_NAME' => 'Komuna e Prishtinës',
+            'MUNICIPALITY_ADDRESS' => 'Rruga UÇK 2, Prishtinë',
+            'MUNICIPALITY_CONTACT' => 'info@prishtinaonline.com',
+            'MUNICIPAL_BANK_ACCOUNT' => '1000000000000000',
         ];
     }
 

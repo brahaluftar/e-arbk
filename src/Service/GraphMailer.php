@@ -68,6 +68,17 @@ final class GraphMailer
         if ($status < 200 || $status >= 300) throw new RuntimeException('Microsoft Graph sendMail failed (HTTP ' . $status . ').');
     }
 
+    public function sendHtml(string $email, string $subject, string $html): void
+    {
+        $tenant=$this->config->string('GRAPH_TENANT_ID');$client=$this->config->string('GRAPH_CLIENT_ID');$secret=$this->config->string('GRAPH_CLIENT_SECRET');$sender=$this->config->string('GRAPH_SENDER_MAILBOX');$baseUrl=rtrim($this->config->string('GRAPH_BASE_URL'),'/');$timeout=max(1,min(60,$this->config->int('GRAPH_TIMEOUT_SECONDS')));
+        if($tenant===''||$client===''||$secret===''||filter_var($sender,FILTER_VALIDATE_EMAIL)===false||filter_var($email,FILTER_VALIDATE_EMAIL)===false)throw new RuntimeException('Microsoft Graph mail configuration or recipient is invalid.');
+        if(parse_url($baseUrl,PHP_URL_SCHEME)!=='https'||strtolower((string)parse_url($baseUrl,PHP_URL_HOST))!=='graph.microsoft.com')throw new RuntimeException('Microsoft Graph mail configuration is invalid.');
+        [$status,$body]=$this->request('POST','https://login.microsoftonline.com/'.rawurlencode($tenant).'/oauth2/v2.0/token',['Content-Type'=>'application/x-www-form-urlencoded'],http_build_query(['client_id'=>$client,'client_secret'=>$secret,'scope'=>'https://graph.microsoft.com/.default','grant_type'=>'client_credentials']),$timeout);
+        $data=json_decode($body,true);$token=is_array($data)&&is_string($data['access_token']??null)?$data['access_token']:'';if($status<200||$status>=300||$token==='')throw new RuntimeException('Microsoft identity token request failed.');
+        $payload=['message'=>['subject'=>$subject,'body'=>['contentType'=>'HTML','content'=>$html],'toRecipients'=>[['emailAddress'=>['address'=>$email]]]],'saveToSentItems'=>false];
+        [$status]=$this->request('POST',$baseUrl.'/users/'.rawurlencode($sender).'/sendMail',['Authorization'=>'Bearer '.$token,'Content-Type'=>'application/json'],json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$timeout);if($status<200||$status>=300)throw new RuntimeException('Microsoft Graph sendMail failed (HTTP '.$status.').');
+    }
+
     /** @param array<string,string> $headers @return array{int,string} */
     private function request(string $method, string $url, array $headers, string $body, int $timeout): array
     {

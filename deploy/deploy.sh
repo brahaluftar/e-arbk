@@ -23,7 +23,7 @@ Usage: bash deploy.sh COMMAND [--create-database]
   database-verify   Compare database rows/content against the packaged snapshot
   migrate           Run pending application migrations in the staged release
   activate          Validate and switch the application to the staged release
-  apache            Enable the separate ARBK virtual host, preserving the default site
+    apache            Manage ARBK in the CloudClusters master vhost file
   help              Print this help
 
 --create-database is optional with deploy/database-import. It needs CREATE DATABASE
@@ -32,7 +32,8 @@ permission. Otherwise provision an empty database in CloudClusters first.
 Application: /cloudclusters/arbk
 Environment: /cloudclusters/arbk-env/.env
 PHP_BIN, WEB_USER and WEB_GROUP may be set in the shell. Default FPM socket in
-100-arbk.conf is /var/run/php/php8.1-fpm.sock. No default_site shortcut is modified.
+100-arbk.conf is /var/run/php/php8.1-fpm.sock. The master Apache file is
+/cloudclusters/config/apache/default.conf. PHP-FPM is restarted after activation.
 HELP
 }
 [[ "$COMMAND" == help || "$COMMAND" == --help ]] && { usage; exit 0; }
@@ -84,9 +85,9 @@ stage() {
     for path in "$APP_ROOT/current" "$APP_ROOT/public"; do
         [[ ! -e "$path" || -L "$path" ]] || die "Refusing to replace existing directory/file: $path"
     done
-    mkdir -p "$APP_ROOT/releases" "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log"
+    mkdir -p "$APP_ROOT/releases" "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log" "$APP_ROOT/shared/documents"
     [[ ! -L "$RELEASE" ]] || die 'Release directory must not be a symlink.'
-    for path in "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log"; do
+    for path in "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log" "$APP_ROOT/shared/documents"; do
         [[ "$(readlink -f "$path")" == "$path" ]] || die "Unexpected runtime directory target: $path"
     done
     if [[ -d "$RELEASE" ]]; then
@@ -96,13 +97,19 @@ stage() {
         local staging="$APP_ROOT/releases/.staging-$VERSION-$$"
         mkdir "$staging"
         cp -a "$BUNDLE/app/." "$staging/"
+        if [[ ! -f "$staging/public/logo_prishtina.png" && -f "$APP_ROOT/current/public/logo_prishtina.png" ]]; then
+            cp "$APP_ROOT/current/public/logo_prishtina.png" "$staging/public/logo_prishtina.png"
+        fi
         # These directories in the app package contain no business data.
         [[ ! -L "$staging/var/imports" && ! -L "$staging/var/log" ]] || die 'Invalid runtime directories in package.'
         rm -f "$staging/var/imports/.gitkeep"
         rmdir "$staging/var/imports"
+        rm -f "$staging/var/documents/.gitkeep"
+        rmdir "$staging/var/documents"
         if [[ -d "$staging/var/log" ]]; then rmdir "$staging/var/log"; fi
         ln -s "$APP_ROOT/shared/imports" "$staging/var/imports"
         ln -s "$APP_ROOT/shared/log" "$staging/var/log"
+        ln -s "$APP_ROOT/shared/documents" "$staging/var/documents"
         cp "$BUNDLE/SHA256SUMS" "$staging/.bundle-sha256"
         find "$staging" -type d -exec chmod 755 {} +
         find "$staging" -type f -exec chmod 644 {} +
@@ -117,10 +124,13 @@ stage() {
         done
     fi
     chmod 755 "$APP_ROOT" "$APP_ROOT/releases" "$APP_ROOT/shared"
-    chmod 770 "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log"
+    # setgid keeps CLI/cron files in the PHP-FPM group even when the worker runs as root.
+    chmod 2770 "$APP_ROOT/shared/imports" "$APP_ROOT/shared/log" "$APP_ROOT/shared/documents"
     find "$APP_ROOT/shared/imports" -maxdepth 1 -type f -exec chmod 660 {} +
     if [[ $(id -u) -eq 0 ]]; then
         chown -R "$WEB_USER:$WEB_GROUP" "$APP_ROOT/shared"
+        find "$APP_ROOT/shared/documents" -type d -exec chmod 2770 {} +
+        find "$APP_ROOT/shared/documents" -type f -exec chmod 660 {} +
         chown "root:$WEB_GROUP" "$ENV_DIR" "$ENV_FILE"
         chmod 750 "$ENV_DIR"
         chmod 640 "$ENV_FILE"
@@ -137,10 +147,27 @@ import_database() {
     [[ -n "$CREATE_DATABASE" ]] && options+=(--create-database)
     "$PHP_BIN" "$RELEASE/bin/database-transfer.php" import "$BUNDLE/database" "${options[@]}"
 }
-migrate() { require_release; "$PHP_BIN" "$RELEASE/bin/migrate.php"; }
+verified_php() {
+    local script=$1 label=$2 marker status marker_value
+    marker=$(mktemp "$APP_ROOT/.verification-$VERSION.XXXXXXXX")
+    set +e
+    ARBK_COMPLETION_FILE="$marker" "$PHP_BIN" "$script"
+    status=$?
+    set -e
+    marker_value=$(cat "$marker")
+    rm -f "$marker"
+    [[ "$marker_value" == complete ]] || die "$label did not reach its verified completion point (PHP exit $status)."
+    if [[ "$status" -eq 0 ]]; then return; fi
+    if [[ "$status" -eq 134 ]]; then
+        printf 'WARNING: %s completed, but CloudClusters PHP aborted during pdo_sqlsrv shutdown; continuing after marker verification.\n' "$label" >&2
+        return
+    fi
+    die "$label completed its checks but PHP exited unexpectedly with status $status."
+}
+migrate() { require_release; verified_php "$RELEASE/bin/migrate.php" 'Database migration'; }
 activate() {
     require_release
-    "$PHP_BIN" "$RELEASE/bin/preflight-production.php"
+    verified_php "$RELEASE/bin/preflight-production.php" 'Production preflight'
     [[ ! -e "$APP_ROOT/current" || -L "$APP_ROOT/current" ]] || die 'current is not a symlink.'
     [[ ! -e "$APP_ROOT/public" || -L "$APP_ROOT/public" ]] || die 'public is not a symlink.'
     if [[ -L "$APP_ROOT/public" ]]; then
@@ -150,38 +177,47 @@ activate() {
     ln -s "$RELEASE" "$next"
     mv -Tf "$next" "$APP_ROOT/current"
     if [[ ! -L "$APP_ROOT/public" ]]; then ln -s "$APP_ROOT/current/public" "$APP_ROOT/public"; fi
+    if command -v supervisorctl >/dev/null 2>&1 && supervisorctl status php-fpm >/dev/null 2>&1; then
+        supervisorctl restart php-fpm >/dev/null || die 'Release activated, but PHP-FPM could not be restarted to clear OPcache.'
+    else
+        die 'Release activated, but the CloudClusters php-fpm supervisor service was not found; restart PHP-FPM manually.'
+    fi
     printf 'Activated %s. DocumentRoot: %s/public\n' "$VERSION" "$APP_ROOT"
 }
 apache() {
     [[ $(id -u) -eq 0 ]] || die 'Apache configuration requires root.'
     [[ -d "$APP_ROOT/public" ]] || die 'Deploy and activate the app first.'
     [[ -S /var/run/php/php8.1-fpm.sock ]] || die 'Expected PHP 8.1 FPM socket is absent; select the correct socket before enabling this site.'
-    local conf=/etc/apache2/sites-available/100-arbk.conf
-    local enabled=/etc/apache2/sites-enabled/100-arbk.conf
-    local before after
-    # With one vhost Apache prints a single *:80 line; with several it prints
-    # a NameVirtualHost group followed by its default. Compare source file/line.
-    default_http() {
-        apache2ctl -S 2>&1 | awk '/^[[:space:]]*\*:80[[:space:]]/ { if ($0 ~ /is a NameVirtualHost/) { found=1; next } print $NF; exit } found && /default server/ { print $NF; exit }'
-    }
-    before=$(default_http)
-    [[ -n "$before" ]] || die 'Cannot identify the existing default *:80 virtual host; review Apache configuration manually.'
-    if [[ -e "$conf" ]]; then cmp -s "$conf" "$BUNDLE/100-arbk.conf" || die 'A different ARBK Apache configuration already exists; review it manually.';
-    else install -m 644 "$BUNDLE/100-arbk.conf" "$conf"; fi
-    local was_enabled=0
-    [[ -e "$enabled" ]] && was_enabled=1
-    a2ensite 100-arbk.conf
-    if ! apache2ctl configtest; then
-        [[ "$was_enabled" -eq 1 ]] || a2dissite 100-arbk.conf
-        die 'Apache syntax check failed; configuration was not reloaded.'
+    local conf=/cloudclusters/config/apache/default.conf
+    local replacement backup changed=0
+    [[ -f "$conf" && ! -L "$conf" ]] || die "Expected persistent CloudClusters Apache file: $conf"
+    grep -Fq 'ServerName arbk.kryeqyteti.net' "$BUNDLE/100-arbk.conf" || die 'Packaged ARBK vhost has no expected ServerName.'
+    grep -Fq 'DocumentRoot /cloudclusters/arbk/public' "$BUNDLE/100-arbk.conf" || die 'Packaged ARBK vhost has an unexpected DocumentRoot.'
+    apache2ctl configtest || die 'Existing Apache configuration is invalid; no changes made.'
+    replacement=$(mktemp "$APP_ROOT/.apache-replacement.XXXXXXXX")
+    backup="$conf.arbk-backup-$$"
+    awk -v replacement="$BUNDLE/100-arbk.conf" -f "$BUNDLE/manage-apache-vhosts.awk" "$conf" > "$replacement" || { rm -f "$replacement"; die 'Could not safely parse existing virtual hosts.'; }
+    if ! cmp -s "$conf" "$replacement"; then
+        cp -p "$conf" "$backup"
+        chmod --reference="$conf" "$replacement"
+        chown --reference="$conf" "$replacement"
+        mv -f "$replacement" "$conf"
+        changed=1
+        if ! apache2ctl configtest; then
+            mv -f "$backup" "$conf"
+            die 'Apache syntax check failed; master vhost file was restored.'
+        fi
+        printf '%s\n' 'CloudClusters master vhost file updated; non-ARBK content was preserved and duplicate ARBK blocks removed.'
+    else
+        rm -f "$replacement"
+        printf '%s\n' 'CloudClusters master vhost file already has one canonical ARBK block.'
     fi
-    after=$(default_http)
-    if [[ "$before" != "$after" ]]; then
-        [[ "$was_enabled" -eq 1 ]] || a2dissite 100-arbk.conf
-        die 'Default virtual host changed unexpectedly; configuration was not reloaded.'
+    if ! supervisorctl restart apache; then
+        if [[ "$changed" -eq 1 ]]; then mv -f "$backup" "$conf"; apache2ctl configtest >/dev/null 2>&1 && supervisorctl restart apache >/dev/null 2>&1 || true; fi
+        die 'Apache could not restart; prior master configuration was restored when changed.'
     fi
-    apache2ctl graceful
-    printf '%s\n' 'ARBK virtual host enabled. Existing default_site shortcut was not changed.'
+    [[ "$changed" -eq 0 ]] || rm -f "$backup"
+    printf '%s\n' 'Apache restarted. Existing virtual hosts and default_site were preserved.'
 }
 
 case "$COMMAND" in

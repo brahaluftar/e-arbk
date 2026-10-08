@@ -13,7 +13,7 @@ final class BusinessEditService
         'NRBIZ'=>20,'Emri'=>255,'EMRI_TREGTAR'=>510,'Lloji'=>50,'NACE_CODE_REG'=>20,
         'NACEPERSHKRIMI'=>255,'SEKTORI'=>510,'MADHESIA'=>40,'Qyteti'=>100,'Statusi'=>40,
         'Viti'=>4,'MUAJI'=>20,'ATK_DATEMBYLLJE'=>20,'NACE_CODE_TARIFF'=>10,
-        'nace_veprimtaria_tariff'=>255,
+        'nace_veprimtaria_tariff'=>255,'NUMRI_FISKAL'=>30,'ADRESA'=>500,'EMAIL'=>254,
     ];
     private const INTEGERS=['NR_PUNETOREVE','TOTAL_M','TOTAL_F'];
     private const BITS=['Pasiv','ATK_MBYLLUR','pronare_grua','pronar_veteran'];
@@ -27,6 +27,7 @@ final class BusinessEditService
     {
         $values=[];
         foreach(self::TEXT as $field=>$limit){$value=$this->nullable($input[$field]??null);if($value!==null&&mb_strlen($value)>$limit)throw new DomainException("Fusha $field është më e gjatë se kufiri $limit.");$values[$field]=$value;}
+        if($values['EMAIL']!==null&&filter_var($values['EMAIL'],FILTER_VALIDATE_EMAIL)===false)throw new DomainException('Emaili i biznesit nuk është valid.');
         foreach(self::INTEGERS as $field){$raw=$this->nullable($input[$field]??null);if($raw!==null&&filter_var($raw,FILTER_VALIDATE_INT)===false)throw new DomainException("Fusha $field duhet të jetë numër i plotë.");$value=$raw===null?null:(int)$raw;if($value!==null&&$value<0)throw new DomainException("Fusha $field nuk mund të jetë negative.");$values[$field]=$value;}
         foreach(self::BITS as $field){$raw=$this->nullable($input[$field]??null);if($raw!==null&&!in_array($raw,['0','1'],true))throw new DomainException("Fusha $field nuk është valide.");$values[$field]=$raw===null?null:(int)$raw;}
         foreach(self::DATES as $field){$raw=$this->nullable($input[$field]??null);if($raw!==null&&!$this->validDate($raw))throw new DomainException("Data në fushën $field nuk është valide.");$values[$field]=$raw;}

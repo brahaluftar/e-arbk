@@ -3,6 +3,8 @@
 /var/log/*.log
 /var/imports/*
 !/var/imports/.gitkeep
+/var/documents/*
+!/var/documents/.gitkeep
 *.bak
 *.sqlbak
 /.phpunit.cache/

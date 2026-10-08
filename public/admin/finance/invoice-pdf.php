@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);
+$app=require dirname(__DIR__,3).'/bootstrap.php';$app['auth']->requireRole(['ADMIN']);$id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);if(!$id){http_response_code(404);exit('Not found.');}$store=new App\Document\DocumentStore(dirname(__DIR__,3).'/var/documents');$key=(new App\Billing\InvoiceDocumentService($app['pdo'],$app['config'],$store))->ensure((int)$id);$path=$store->path($key);header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="fatura-'.$id.'.pdf"');header('Content-Length: '.filesize($path));header('Cache-Control: private, no-store');readfile($path);

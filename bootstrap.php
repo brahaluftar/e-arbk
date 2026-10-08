@@ -42,6 +42,16 @@ function redirect(string $path): never { header('Location: ' . app_url($path)); 
 function flash(string $type, string $message): void { $_SESSION['_flash'][]=['type'=>$type,'message'=>$message]; }
 function take_flashes(): array { $f=$_SESSION['_flash']??[]; unset($_SESSION['_flash']); return is_array($f)?$f:[]; }
 function request_ip(): string { global $config; if($config->bool('TRUST_PROXY_HEADERS')){$forwarded=trim(explode(',',(string)($_SERVER['HTTP_X_FORWARDED_FOR']??''))[0]);if(filter_var($forwarded,FILTER_VALIDATE_IP)!==false)return $forwarded;} $remote=(string)($_SERVER['REMOTE_ADDR']??'unknown');return filter_var($remote,FILTER_VALIDATE_IP)!==false?$remote:'unknown'; }
+function business_list_path(mixed $query): string {
+    parse_str(ltrim((string)$query,'?'),$input);
+    $allowed=['q','nace','classification','atk_status','pronare_grua','pronar_veteran','page'];$params=[];
+    foreach($allowed as $key)if(isset($input[$key])&&is_scalar($input[$key])&&(string)$input[$key]!=='')$params[$key]=(string)$input[$key];
+    if(isset($params['page']))$params['page']=(string)max(1,(int)$params['page']);
+    if(isset($params['classification'])&&!in_array($params['classification'],['UNCLASSIFIED','AUTO','MANUAL','AMBIGUOUS','NO_RELATION'],true))unset($params['classification']);
+    if(isset($params['atk_status'])&&!in_array($params['atk_status'],['ACTIVE','DEACTIVATED','NEEDS_REVIEW'],true))unset($params['atk_status']);
+    foreach(['pronare_grua','pronar_veteran'] as $key)if(isset($params[$key])&&!in_array($params[$key],['0','1'],true))unset($params[$key]);
+    return '/admin/businesses/index.php'.($params===[]?'':'?'.http_build_query($params));
+}
 function render(string $template,string $title,array $view=[]): void { global $root,$config,$auth,$csrf; $user=$auth->user(); $flashes=take_flashes(); $templateFile=$root.'/templates/'.$template.'.php'; if(!is_file($templateFile)) throw new RuntimeException('Template not found.'); extract($view,EXTR_SKIP); require $root.'/templates/layout.php'; }
 
 return compact('root','config','pdo','auth','csrf');

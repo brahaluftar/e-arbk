@@ -6,7 +6,7 @@ $filters=['q'=>trim((string)($_GET['q']??'')),'nace'=>trim((string)($_GET['nace'
 $columns=[
     'REGULATION_ID'=>'ID','NRBIZ'=>'Numri i biznesit','Emri'=>'Emri ligjor','EMRI_TREGTAR'=>'Emri tregtar','Lloji'=>'Lloji i biznesit','Qyteti'=>'Qyteti','Statusi'=>'Statusi ARBK','Pasiv'=>'Pasiv','date_pasivizimit'=>'Data e pasivizimit',
     'NACE_CODE_REG'=>'Kodi NACE ARBK','NACEPERSHKRIMI'=>'Përshkrimi NACE','SEKTORI'=>'Sektori','NR_PUNETOREVE'=>'Nr. punëtorëve','MADHESIA'=>'Madhësia','TOTAL_M'=>'Total M','TOTAL_F'=>'Total F','Viti'=>'Viti','MUAJI'=>'Muaji','DATA_SHUARJES'=>'Data e shuarjes',
-    'ATK_MBYLLUR'=>'ATK mbyllur','ATK_DATEMBYLLJE'=>'Data e mbylljes ATK','normalized_atk_status'=>'Statusi ATK','NACE_CODE_TARIFF'=>'Kodi NACE tarifor','nace_veprimtaria_tariff'=>'Veprimtaria tarifore','NACE_REG_TARIFF'=>'Tarifa NACE','nace_category'=>'Kategoria komunale','tariff_snapshot'=>'Tarifa e aplikuar','assignment_method'=>'Metoda e klasifikimit',
+    'ATK_MBYLLUR'=>'ATK mbyllur','ATK_DATEMBYLLJE'=>'Data e mbylljes ATK','normalized_atk_status'=>'Statusi ATK','NACE_CODE_TARIFF'=>'Kodi NACE tarifor','nace_veprimtaria_tariff'=>'Veprimtaria tarifore','NACE_REG_TARIFF'=>'Tarifa NACE','nace_category'=>'Kategoria komunale','tariff_snapshot'=>'Tarifa e aplikuar','assignment_method'=>'Metoda e klasifikimit','assigned_by'=>'Relacionin manual e bëri',
     'pronare_grua'=>'Pronare grua','pronesia_grua'=>'Pronësia grua (%)','pronar_veteran'=>'Pronar veteran','perqindja_veteran'=>'Pronësia veteran (%)','tarifa_me_lirim'=>'Tarifa me lirim',
 ];
 $temporary=tempnam(sys_get_temp_dir(),'arbk_export_');if($temporary===false){http_response_code(500);exit('Export failed.');}

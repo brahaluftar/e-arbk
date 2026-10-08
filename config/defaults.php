@@ -33,4 +33,11 @@ return [
     'BACKUP_MODE' => 'managed',
     'DB_BACKUP_PATH' => '',
     'IMPORT_MAX_BYTES' => '157286400',
+    'INVOICE_DUE_DAYS' => '30',
+    'ANNUAL_INVOICE_BATCH_SIZE' => '200',
+    'MUNICIPALITY_NAME' => 'KOMUNA E PRISHTINËS',
+    'MUNICIPALITY_ADDRESS' => '',
+    'MUNICIPALITY_CONTACT' => '',
+    'MUNICIPAL_BANK_ACCOUNT' => '',
+    'INVOICE_LEGAL_TEXT' => 'Kjo faturë është lëshuar nga sistemi komunal për tarifën vjetore të ushtrimit të veprimtarisë. Pagesa realizohet duke përdorur UNIREF-in e paraqitur në faturë.',
 ];
