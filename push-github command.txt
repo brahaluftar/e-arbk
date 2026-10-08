@@ -1,0 +1,1 @@
+powershell -ExecutionPolicy Bypass -File .\push-github.ps1 "Mesazhi i commit-it"
