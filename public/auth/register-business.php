@@ -6,7 +6,7 @@ $token=trim((string)($_REQUEST['token']??''));$service=new App\Security\Business
 if($invite===null){http_response_code(410);render('auth/register-business','Regjistrimi',['invite'=>null,'token'=>'']);return;}
 if($_SERVER['REQUEST_METHOD']==='POST'){
     if(!$app['csrf']->verify($_POST['_csrf']??null)){http_response_code(400);exit('Invalid request.');}
-    try{$service->register($token,(string)($_POST['full_name']??''),(string)($_POST['password']??''),(string)($_POST['password_confirmation']??''));flash('success','Llogaria u krijua. Tani mund të hyni.');redirect('/auth/login.php');}
+    try{$service->register($token,(string)($_POST['full_name']??''),(string)($_POST['password']??''),(string)($_POST['password_confirmation']??''),(string)($_POST['registration_number']??''));flash('success','Llogaria u krijua dhe kërkesa për lidhjen me biznesin u dërgua për aprovim. Tani mund të hyni.');redirect('/auth/login.php');}
     catch(DomainException $e){flash('error',$e->getMessage());}
 }
 render('auth/register-business','Regjistrimi',compact('invite','token'));

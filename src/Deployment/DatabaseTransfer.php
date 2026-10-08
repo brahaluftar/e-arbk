@@ -10,7 +10,7 @@ use Throwable;
 /** Logical, fresh-database transfer of the application's SQL Server objects. */
 final class DatabaseTransfer
 {
-    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items'];
+    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items'];
     private const JSON = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
     public static function quote(string $name): string { return '['.str_replace(']',']]', $name).']'; }

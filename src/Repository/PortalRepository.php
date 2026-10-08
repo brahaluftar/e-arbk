@@ -19,6 +19,15 @@ final class PortalRepository
     }
 
     /** @return list<array<string,mixed>> */
+    public function accessRequests(int $userId): array
+    {
+        $statement=$this->pdo->prepare("SELECT r.id,r.status_code,r.requested_at,r.reviewed_at,r.review_note,a.Emri legal_name,a.NRBIZ registration_number
+            FROM dbo.business_access_requests r JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=r.business_id
+            WHERE r.user_id=:user ORDER BY r.requested_at DESC,r.id DESC");
+        $statement->execute(['user'=>$userId]);return $statement->fetchAll();
+    }
+
+    /** @return list<array<string,mixed>> */
     public function invoices(int $userId): array
     {
         $statement=$this->pdo->prepare("SELECT i.id,i.invoice_number,i.uniref,i.fiscal_year,i.amount,i.currency,i.issued_on,i.due_on,i.status_code,i.pdf_storage_key,a.Emri business_name,a.NRBIZ registration_number,

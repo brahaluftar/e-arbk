@@ -173,7 +173,12 @@ final class BusinessRepository
     private function where(array $filters): array
     {
         $clauses=['1=1']; $params=[];
-        if(($filters['q']??'')!==''){ $clauses[]='(a.Emri LIKE :q OR a.NRBIZ LIKE :q)'; $params[':q']='%'.trim($filters['q']).'%'; }
+        if(($filters['q']??'')!==''){
+            $clauses[]='(a.Emri LIKE :q_name OR a.NRBIZ LIKE :q_registration)';
+            $query='%'.trim($filters['q']).'%';
+            $params[':q_name']=$query;
+            $params[':q_registration']=$query;
+        }
         if(($filters['nace']??'')!==''){ $clauses[]="LTRIM(RTRIM(a.NACE_CODE_REG))=:nace"; $params[':nace']=trim($filters['nace']); }
         if(($filters['atk_status']??'')!==''){ $clauses[]="COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END)=:atk"; $params[':atk']=$filters['atk_status']; }
         if(($filters['pronare_grua']??'')==='1')$clauses[]='a.pronare_grua=1';elseif(($filters['pronare_grua']??'')==='0')$clauses[]='ISNULL(a.pronare_grua,0)=0';
