@@ -2,7 +2,7 @@
 declare(strict_types=1);
 $app=require dirname(__DIR__,3).'/bootstrap.php';$user=$app['auth']->requireRole(['ADMIN']);
 if($_SERVER['REQUEST_METHOD']!=='POST'||!$app['csrf']->verify($_POST['_csrf']??null)){http_response_code(400);exit('Invalid request.');}
-$type=(string)($_POST['source_type']??'');if(!in_array($type,['ALL','WOMEN','CLOSED'],true)){flash('error','Lloji i importit nuk është valid.');redirect('/admin/imports/index.php');}
+$type=(string)($_POST['source_type']??'');if(!in_array($type,['ALL','WOMEN','CLOSED','CONTACTS','UNITS'],true)){flash('error','Lloji i importit nuk është valid.');redirect('/admin/imports/index.php');}
 $file=$_FILES['xlsx']??null;if(!is_array($file)||($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK){flash('error','Ngarkimi i skedarit dështoi.');redirect('/admin/imports/index.php');}
 $size=(int)($file['size']??0);$name=(string)($file['name']??'');$temporary=(string)($file['tmp_name']??'');
 if($size<1||$size>$app['config']->int('IMPORT_MAX_BYTES')||strtolower(pathinfo($name,PATHINFO_EXTENSION))!=='xlsx'){flash('error','Lejohet vetëm XLSX brenda kufirit të madhësisë.');redirect('/admin/imports/index.php');}

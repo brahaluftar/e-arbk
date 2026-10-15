@@ -8,6 +8,16 @@ final class BusinessImportNormalizer
     public function normalize(array $row,array $columns,string $sourceType): array
     {
         $get=static fn(string $name):?string=>isset($columns[$name])&&isset($row[$columns[$name]])&&trim((string)$row[$columns[$name]])!==''?trim((string)$row[$columns[$name]]):null;
+        if($sourceType==='CONTACTS'){
+            $businessNumber=$get('NRB');$error=$businessNumber===null||preg_match('/^[0-9A-Za-z]{5,20}$/',$businessNumber)!==1?'NRB mungon ose nuk është valid.':null;
+            return ['business_number'=>$businessNumber,'manager_name'=>$get('MENAXHERI'),'phone_number'=>$get('NUMRI_TELEFONIT'),'employee_count'=>$this->integer($get('NUMRI_PUNETOREVE')),'business_size'=>$get('Madhesia'),'validation_error'=>$error];
+        }
+        if($sourceType==='UNITS'){
+            $businessNumber=$get('NRB');$name=$get('EMRI_NJESISE');$address=$get('ADRESA');$nace=strtoupper((string)$get('NACE'));
+            $error=null;if($businessNumber===null||preg_match('/^[0-9A-Za-z]{5,20}$/',$businessNumber)!==1)$error='NRB mungon ose nuk është valid.';elseif($name===null||$address===null)$error='Emri i njësisë dhe adresa kërkohen.';elseif(preg_match('/^[0-9A-Z]{4,20}$/',$nace)!==1)$error='Kodi NACE nuk është valid.';
+            $tariff=$get('TARIFA_VJETORE');$auto=mb_strtolower((string)$get('FATURIM_AUTOMATIK'));
+            return ['business_number'=>$businessNumber,'unit_name'=>$name,'unit_address'=>$address,'unit_email'=>$get('EMAILI'),'phone_number'=>$get('NUMRI_TELEFONIT'),'unit_manager'=>$get('MENAXHERI'),'unit_nace_code'=>$nace,'unit_nace_description'=>$get('VEPRIMTARIA_NACE'),'unit_annual_tariff'=>$tariff!==null&&is_numeric(str_replace(',','.',$tariff))?(float)str_replace(',','.',$tariff):null,'unit_auto_invoice'=>in_array($auto,['1','po','yes','true'],true)?1:0,'validation_error'=>$error];
+        }
         $naceRaw=$get('Aktiv. Nace2 - Përshkrimi');[$naceCode,$naceDescription]=$this->splitNace($naceRaw);
         $sectorRaw=$get('Sektori');$status=$get('Statusi i biznesit');[$status,$passive,$passiveDate]=$this->passiveStatus($status);if($sourceType==='CLOSED')$status='Shuar';
         $businessNumber=$get('Nr. i biznesit');$error=null;if($businessNumber===null||preg_match('/^[0-9A-Za-z]{5,20}$/',$businessNumber)!==1)$error='Numri i biznesit mungon ose nuk është valid.';elseif($naceRaw!==null&&$naceCode===null)$error='Formati NACE nuk është valid.';

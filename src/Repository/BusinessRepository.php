@@ -17,7 +17,7 @@ final class BusinessRepository
         $count=$this->pdo->prepare("SELECT COUNT(*) FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL $candidateJoin WHERE $where");
         $count->execute($params); $total=(int)$count->fetchColumn();
         $pages=max(1,(int)ceil($total/$pageSize)); $page=max(1,min($page,$pages));
-        $sql="SELECT a.REGULATION_ID business_id,a.NRBIZ registration_number,a.Emri legal_name,a.NACE_CODE_REG arbk_nace_code,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) atk_status,x.nace_category,x.tariff_snapshot applied_tariff,COALESCE(c.candidate_count,0) candidate_count FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY";
+        $sql="SELECT a.REGULATION_ID business_id,a.NRBIZ registration_number,a.Emri legal_name,a.EMAIL email,a.NUMRI_TELEFONIT phone_number,a.MENAXHERI manager_name,a.NACE_CODE_REG arbk_nace_code,1+(SELECT COUNT(*) FROM dbo.business_units bu WHERE bu.business_id=a.REGULATION_ID AND bu.is_active=1) unit_count,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) atk_status,x.nace_category,x.assignment_method,x.tariff_snapshot applied_tariff,COALESCE(c.candidate_count,0) candidate_count FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY";
         $statement=$this->pdo->prepare($sql);
         foreach($params as $key=>$value) $statement->bindValue($key,$value);
         $statement->bindValue(':offset',($page-1)*$pageSize,PDO::PARAM_INT); $statement->bindValue(':limit',$pageSize,PDO::PARAM_INT); $statement->execute();
@@ -31,12 +31,19 @@ final class BusinessRepository
         $statement=$this->pdo->prepare($sql); $statement->execute(['id'=>$id]); $row=$statement->fetch(); return is_array($row)?$row:null;
     }
 
+    /** @return list<array<string,mixed>> */
+    public function units(int $businessId): array
+    {
+        $statement=$this->pdo->prepare("SELECT u.*,(SELECT TOP(1) i.id FROM dbo.business_invoices i WHERE i.business_unit_id=u.id ORDER BY i.fiscal_year DESC,i.id DESC) latest_invoice_id,(SELECT TOP(1) i.fiscal_year FROM dbo.business_invoices i WHERE i.business_unit_id=u.id ORDER BY i.fiscal_year DESC,i.id DESC) latest_invoice_year FROM dbo.business_units u WHERE u.business_id=:business ORDER BY u.is_active DESC,u.unit_name,u.id");
+        $statement->execute(['business'=>$businessId]);return $statement->fetchAll();
+    }
+
     /** @param array<string,string> $filters */
     public function export(array $filters): \PDOStatement
     {
         [$where,$params]=$this->where($filters);
         $candidateJoin="LEFT JOIN (SELECT NACE_CODE,COUNT(*) candidate_count FROM dbo.NACE_LIST WHERE NACE_CODE IS NOT NULL GROUP BY NACE_CODE) c ON c.NACE_CODE=a.NACE_CODE_REG";
-        $sql="SELECT a.REGULATION_ID,a.NRBIZ,a.Emri,a.EMRI_TREGTAR,a.Lloji,a.Qyteti,a.Statusi,a.Pasiv,a.date_pasivizimit,a.NACE_CODE_REG,a.NACEPERSHKRIMI,a.SEKTORI,a.NR_PUNETOREVE,a.MADHESIA,a.TOTAL_M,a.TOTAL_F,a.Viti,a.MUAJI,a.DATA_SHUARJES,a.ATK_MBYLLUR,a.ATK_DATEMBYLLJE,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) normalized_atk_status,a.NACE_CODE_TARIFF,a.nace_veprimtaria_tariff,a.NACE_REG_TARIFF,x.nace_category,x.tariff_snapshot,x.assignment_method,u.full_name assigned_by,a.pronare_grua,a.pronesia_grua,a.pronar_veteran,a.perqindja_veteran,a.tarifa_me_lirim FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL LEFT JOIN dbo.app_users u ON u.id=x.assigned_by_user_id $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID";
+        $sql="SELECT a.REGULATION_ID,a.NRBIZ,a.Emri,a.EMRI_TREGTAR,a.Lloji,a.Qyteti,a.Statusi,a.Pasiv,a.date_pasivizimit,a.NACE_CODE_REG,a.NACEPERSHKRIMI,a.SEKTORI,a.NR_PUNETOREVE,a.MADHESIA,a.TOTAL_M,a.TOTAL_F,a.Viti,a.MUAJI,a.DATA_SHUARJES,a.ATK_MBYLLUR,a.ATK_DATEMBYLLJE,a.MENAXHERI,a.NUMRI_TELEFONIT,a.EMAIL,1+(SELECT COUNT(*) FROM dbo.business_units bu WHERE bu.business_id=a.REGULATION_ID AND bu.is_active=1) NUMRI_NJESIVE,COALESCE(s.status_code,CASE WHEN a.ATK_MBYLLUR=1 THEN 'DEACTIVATED' ELSE 'ACTIVE' END) normalized_atk_status,a.NACE_CODE_TARIFF,a.nace_veprimtaria_tariff,a.NACE_REG_TARIFF,x.nace_category,x.tariff_snapshot,x.assignment_method,u.full_name assigned_by,a.pronare_grua,a.pronesia_grua,a.pronar_veteran,a.perqindja_veteran,a.tarifa_me_lirim FROM dbo.ARBK_LIST a LEFT JOIN dbo.business_atk_status s ON s.business_id=a.REGULATION_ID LEFT JOIN dbo.business_nace_assignments x ON x.business_id=a.REGULATION_ID AND x.ended_at IS NULL LEFT JOIN dbo.app_users u ON u.id=x.assigned_by_user_id $candidateJoin WHERE $where ORDER BY a.Emri,a.REGULATION_ID";
         $statement=$this->pdo->prepare($sql);$statement->execute($params);return $statement;
     }
 

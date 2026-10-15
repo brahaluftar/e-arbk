@@ -15,6 +15,8 @@ New-Item -ItemType Directory -Path $appPath -Force | Out-Null
 foreach ($directory in @('bin','config','database','public','src','templates')) {
     Copy-Item -LiteralPath (Join-Path $rootPath $directory) -Destination $appPath -Recurse
 }
+# Environment files are machine-specific secrets and must never enter a release.
+Get-ChildItem -LiteralPath $appPath -Recurse -Force -File -Filter '.env' | Remove-Item -Force
 foreach ($file in @('bootstrap.php','index.php','composer.json','composer.lock','README.md','.htaccess','.env.production.example')) {
     Copy-Item -LiteralPath (Join-Path $rootPath $file) -Destination $appPath
 }
@@ -40,7 +42,7 @@ foreach ($entry in $overrides.GetEnumerator()) {
 & composer install --working-dir $appPath --no-dev --prefer-dist --no-interaction --no-progress --classmap-authoritative --ignore-platform-req=ext-gd
 if ($LASTEXITCODE -ne 0) { throw 'Production dependency installation failed.' }
 Copy-Item -LiteralPath $snapshotPath -Destination (Join-Path $bundlePath 'database') -Recurse
-foreach ($file in @('deploy.sh','100-arbk.conf','manage-apache-vhosts.awk')) {
+foreach ($file in @('deploy.sh','deploy-simple.sh','install-cron.sh','cron.example','100-arbk.conf','manage-apache-vhosts.awk')) {
     $text = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $file)).Replace("`r`n","`n")
     [System.IO.File]::WriteAllText((Join-Path $bundlePath $file),$text,(New-Object System.Text.UTF8Encoding($false)))
 }
@@ -69,5 +71,9 @@ $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerI
 [System.IO.File]::WriteAllText($archivePath + '.sha256',$hash + '  ' + [System.IO.Path]::GetFileName($archivePath) + "`n",(New-Object System.Text.UTF8Encoding($false)))
 $launcher = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'deploy-arbk.sh')).Replace("`r`n","`n")
 [System.IO.File]::WriteAllText((Join-Path $rootPath 'dist\deploy-arbk.sh'),$launcher,(New-Object System.Text.UTF8Encoding($false)))
+$simpleLauncher = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'deploy-simple.sh')).Replace("`r`n","`n")
+[System.IO.File]::WriteAllText((Join-Path $rootPath 'dist\deploy-simple.sh'),$simpleLauncher,(New-Object System.Text.UTF8Encoding($false)))
+$cronInstaller = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'install-cron.sh')).Replace("`r`n","`n")
+[System.IO.File]::WriteAllText((Join-Path $rootPath 'dist\install-cron.sh'),$cronInstaller,(New-Object System.Text.UTF8Encoding($false)))
 Write-Output "Package: $archivePath"
 Write-Output "SHA256: $hash"

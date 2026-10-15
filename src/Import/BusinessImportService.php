@@ -10,7 +10,7 @@ use Throwable;
 final class BusinessImportService
 {
     private const IMPORT_CITY='Prishtinë';
-    private const FIELDS=['business_number','legal_name','trade_name','business_type','nace_raw','nace_code','nace_description','sector_raw','sector_clean','employee_count','business_size','total_m','total_f','city','business_status','business_year','business_month','closed_date','passive','passive_date','validation_error'];
+    private const FIELDS=['business_number','legal_name','trade_name','business_type','nace_raw','nace_code','nace_description','sector_raw','sector_clean','employee_count','business_size','total_m','total_f','city','business_status','business_year','business_month','closed_date','passive','passive_date','manager_name','phone_number','unit_name','unit_address','unit_email','unit_manager','unit_nace_code','unit_nace_description','unit_annual_tariff','unit_auto_invoice','validation_error'];
     public function __construct(private PDO $pdo,private AuditLogger $audit,private XlsxRowReader $reader=new XlsxRowReader(),private BusinessImportNormalizer $normalizer=new BusinessImportNormalizer()){}
 
     public function processNext(): bool
@@ -26,14 +26,16 @@ final class BusinessImportService
         $path=(string)$run['storage_path'];if(!preg_match('/^(?:[A-Za-z]:[\\\\\/]|\/)/',$path))$path=dirname(__DIR__,2).DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$path);if(!is_file($path))throw new RuntimeException('Import file is missing.');$runId=(int)$run['id'];$sourceType=(string)$run['source_type'];
         $this->pdo->prepare('DELETE dbo.business_import_staging WHERE import_run_id=:id')->execute(['id'=>$runId]);
         $headers=[];$rowNumber=0;$batch=[];
-        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[]||($normalized['city']??null)!==self::IMPORT_CITY)continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
+        foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers,$sourceType);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[]||(!in_array($sourceType,['CONTACTS','UNITS'],true)&&($normalized['city']??null)!==self::IMPORT_CITY))continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
         if($batch!==[])$this->insertBatch($runId,$batch);
         $this->merge($runId,$sourceType,max(0,$rowNumber-1));
     }
 
     /** @param array<string,int> $headers */
-    private function validateHeaders(array $headers): void
+    private function validateHeaders(array $headers,string $sourceType): void
     {
+        if($sourceType==='UNITS'){foreach(['NRB','EMRI_NJESISE','ADRESA','NUMRI_TELEFONIT','EMAILI','MENAXHERI','NACE','VEPRIMTARIA_NACE','TARIFA_VJETORE','FATURIM_AUTOMATIK'] as $required)if(!array_key_exists($required,$headers))throw new RuntimeException("Missing required Excel column: $required");return;}
+        if($sourceType==='CONTACTS'){foreach(['NRB','MENAXHERI','NUMRI_TELEFONIT','NUMRI_PUNETOREVE','Madhesia'] as $required)if(!array_key_exists($required,$headers))throw new RuntimeException("Missing required Excel column: $required");return;}
         foreach(['Nr. i biznesit','Emri i biznesit','Aktiv. Nace2 - Përshkrimi','Sektori','Qyteti'] as $required)if(!array_key_exists($required,$headers))throw new RuntimeException("Missing required Excel column: $required");
     }
 
@@ -44,10 +46,10 @@ final class BusinessImportService
         foreach($rows as $entry)$payload[]=['source_row_number'=>$entry['source_row_number']]+array_intersect_key($entry['data'],array_flip(self::FIELDS));
         $json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR);
         $sql=<<<'SQL'
-INSERT dbo.business_import_staging(import_run_id,source_row_number,business_number,legal_name,trade_name,business_type,nace_raw,nace_code,nace_description,sector_raw,sector_clean,employee_count,business_size,total_m,total_f,city,business_status,business_year,business_month,closed_date,passive,passive_date,validation_error)
-SELECT :run_id,j.source_row_number,j.business_number,j.legal_name,j.trade_name,j.business_type,j.nace_raw,j.nace_code,j.nace_description,j.sector_raw,j.sector_clean,j.employee_count,j.business_size,j.total_m,j.total_f,j.city,j.business_status,j.business_year,j.business_month,j.closed_date,j.passive,j.passive_date,j.validation_error
+INSERT dbo.business_import_staging(import_run_id,source_row_number,business_number,legal_name,trade_name,business_type,nace_raw,nace_code,nace_description,sector_raw,sector_clean,employee_count,business_size,total_m,total_f,city,business_status,business_year,business_month,closed_date,passive,passive_date,manager_name,phone_number,unit_name,unit_address,unit_email,unit_manager,unit_nace_code,unit_nace_description,unit_annual_tariff,unit_auto_invoice,validation_error)
+SELECT :run_id,j.source_row_number,j.business_number,j.legal_name,j.trade_name,j.business_type,j.nace_raw,j.nace_code,j.nace_description,j.sector_raw,j.sector_clean,j.employee_count,j.business_size,j.total_m,j.total_f,j.city,j.business_status,j.business_year,j.business_month,j.closed_date,j.passive,j.passive_date,j.manager_name,j.phone_number,j.unit_name,j.unit_address,j.unit_email,j.unit_manager,j.unit_nace_code,j.unit_nace_description,j.unit_annual_tariff,j.unit_auto_invoice,j.validation_error
 FROM OPENJSON(:payload) WITH(
- source_row_number int '$.source_row_number',business_number varchar(20) '$.business_number',legal_name nvarchar(510) '$.legal_name',trade_name nvarchar(510) '$.trade_name',business_type nvarchar(100) '$.business_type',nace_raw nvarchar(700) '$.nace_raw',nace_code varchar(20) '$.nace_code',nace_description nvarchar(510) '$.nace_description',sector_raw nvarchar(700) '$.sector_raw',sector_clean nvarchar(510) '$.sector_clean',employee_count int '$.employee_count',business_size nvarchar(40) '$.business_size',total_m int '$.total_m',total_f int '$.total_f',city nvarchar(200) '$.city',business_status nvarchar(40) '$.business_status',business_year varchar(4) '$.business_year',business_month varchar(20) '$.business_month',closed_date date '$.closed_date',passive bit '$.passive',passive_date date '$.passive_date',validation_error nvarchar(500) '$.validation_error'
+ source_row_number int '$.source_row_number',business_number varchar(20) '$.business_number',legal_name nvarchar(510) '$.legal_name',trade_name nvarchar(510) '$.trade_name',business_type nvarchar(100) '$.business_type',nace_raw nvarchar(700) '$.nace_raw',nace_code varchar(20) '$.nace_code',nace_description nvarchar(510) '$.nace_description',sector_raw nvarchar(700) '$.sector_raw',sector_clean nvarchar(510) '$.sector_clean',employee_count int '$.employee_count',business_size nvarchar(40) '$.business_size',total_m int '$.total_m',total_f int '$.total_f',city nvarchar(200) '$.city',business_status nvarchar(40) '$.business_status',business_year varchar(4) '$.business_year',business_month varchar(20) '$.business_month',closed_date date '$.closed_date',passive bit '$.passive',passive_date date '$.passive_date',manager_name nvarchar(255) '$.manager_name',phone_number nvarchar(50) '$.phone_number',unit_name nvarchar(255) '$.unit_name',unit_address nvarchar(500) '$.unit_address',unit_email nvarchar(254) '$.unit_email',unit_manager nvarchar(255) '$.unit_manager',unit_nace_code varchar(20) '$.unit_nace_code',unit_nace_description nvarchar(510) '$.unit_nace_description',unit_annual_tariff decimal(18,2) '$.unit_annual_tariff',unit_auto_invoice bit '$.unit_auto_invoice',validation_error nvarchar(500) '$.validation_error'
 )j;
 SQL;
         $statement=$this->pdo->prepare($sql);$statement->bindValue('run_id',$runId,PDO::PARAM_INT);$statement->bindValue('payload',$json,PDO::PARAM_STR);$statement->execute();
@@ -55,6 +57,8 @@ SQL;
 
     private function merge(int $runId,string $sourceType,int $totalRows): void
     {
+        if($sourceType==='UNITS'){$this->mergeUnits($runId,$totalRows);return;}
+        if($sourceType==='CONTACTS'){$this->mergeContacts($runId,$totalRows);return;}
         $women=$sourceType==='WOMEN'?1:0;
         $sql=<<<SQL
 SET NOCOUNT ON;SET XACT_ABORT ON;
@@ -87,5 +91,37 @@ UPDATE dbo.business_import_runs SET status='COMPLETED',total_rows=:total_rows,va
 SELECT SUM(CASE WHEN action_name='INSERT' THEN 1 ELSE 0 END) inserted,SUM(CASE WHEN action_name='UPDATE' THEN 1 ELSE 0 END) updated FROM @actions;
 SQL;
         $this->pdo->beginTransaction();try{$statement=$this->pdo->prepare($sql);$statement->execute(['run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'run_id4'=>$runId,'total_rows'=>$totalRows,'total_rows2'=>$totalRows,'run_id5'=>$runId]);$counts=$statement->fetch()?:[];$this->audit->record(null,'BUSINESS_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['source_type'=>$sourceType,'total'=>$totalRows,'inserted'=>(int)($counts['inserted']??0),'updated'=>(int)($counts['updated']??0)]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
+    }
+
+    private function mergeUnits(int $runId,int $totalRows):void
+    {
+        $sql=<<<'SQL'
+SET NOCOUNT ON;SET XACT_ABORT ON;
+DECLARE @actions TABLE(action_name varchar(10));
+WITH ranked AS(SELECT s.*,ROW_NUMBER() OVER(PARTITION BY business_number,unit_name,unit_address ORDER BY source_row_number DESC) rn FROM dbo.business_import_staging s WHERE import_run_id=:run_id), source_rows AS(SELECT a.REGULATION_ID business_id,s.*,r.uploaded_by_user_id FROM ranked s JOIN dbo.ARBK_LIST a ON a.NRBIZ=s.business_number JOIN dbo.business_import_runs r ON r.id=s.import_run_id WHERE s.rn=1 AND s.validation_error IS NULL)
+MERGE dbo.business_units WITH(HOLDLOCK) target USING source_rows source ON target.business_id=source.business_id AND target.unit_name=source.unit_name AND target.address=source.unit_address
+WHEN MATCHED THEN UPDATE SET phone_number=source.phone_number,email=source.unit_email,manager_name=source.unit_manager,nace_code=source.unit_nace_code,nace_description=source.unit_nace_description,annual_tariff=source.unit_annual_tariff,auto_invoice=COALESCE(source.unit_auto_invoice,0),is_active=1,updated_at=SYSUTCDATETIME()
+WHEN NOT MATCHED THEN INSERT(business_id,unit_name,address,phone_number,email,manager_name,nace_code,nace_description,annual_tariff,auto_invoice,created_by_user_id) VALUES(source.business_id,source.unit_name,source.unit_address,source.phone_number,source.unit_email,source.unit_manager,source.unit_nace_code,source.unit_nace_description,source.unit_annual_tariff,COALESCE(source.unit_auto_invoice,0),source.uploaded_by_user_id)
+OUTPUT $action INTO @actions;
+DECLARE @valid int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id2 AND validation_error IS NULL);DECLARE @errors int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id3 AND validation_error IS NOT NULL);DECLARE @inserted int=(SELECT COUNT(*) FROM @actions WHERE action_name='INSERT');DECLARE @updated int=(SELECT COUNT(*) FROM @actions WHERE action_name='UPDATE');
+UPDATE dbo.business_import_runs SET status='COMPLETED',total_rows=:total,valid_rows=@valid,inserted_rows=@inserted,updated_rows=@updated,error_rows=@errors,skipped_rows=:total2-@inserted-@updated,completed_at=SYSUTCDATETIME() WHERE id=:run_id4;
+SELECT @inserted inserted,@updated updated;
+SQL;
+        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$counts=$q->fetch()?:[];$this->audit->record(null,'BUSINESS_UNIT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'inserted'=>(int)($counts['inserted']??0),'updated'=>(int)($counts['updated']??0)]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
+    }
+
+    private function mergeContacts(int $runId,int $totalRows):void
+    {
+        $sql=<<<'SQL'
+SET NOCOUNT ON;SET XACT_ABORT ON;
+WITH ranked AS(SELECT s.*,ROW_NUMBER() OVER(PARTITION BY business_number ORDER BY source_row_number DESC) rn FROM dbo.business_import_staging s WHERE import_run_id=:run_id), source_rows AS(SELECT * FROM ranked WHERE rn=1 AND validation_error IS NULL AND business_number IS NOT NULL)
+UPDATE a SET a.MENAXHERI=s.manager_name,a.NUMRI_TELEFONIT=s.phone_number,a.NR_PUNETOREVE=s.employee_count,a.MADHESIA=s.business_size,a.import_updated_at=SYSUTCDATETIME() FROM dbo.ARBK_LIST a JOIN source_rows s ON s.business_number=a.NRBIZ;
+DECLARE @updated int=@@ROWCOUNT;
+DECLARE @valid int=(SELECT COUNT(*) FROM(SELECT business_number FROM dbo.business_import_staging WHERE import_run_id=:run_id2 AND validation_error IS NULL AND business_number IS NOT NULL GROUP BY business_number)q);
+DECLARE @errors int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id3 AND validation_error IS NOT NULL);
+UPDATE dbo.business_import_runs SET status='COMPLETED',total_rows=:total,valid_rows=@valid,inserted_rows=0,updated_rows=@updated,error_rows=@errors,skipped_rows=:total2-@updated,completed_at=SYSUTCDATETIME() WHERE id=:run_id4;
+SELECT @updated updated;
+SQL;
+        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$updated=(int)($q->fetch()['updated']??0);$this->audit->record(null,'BUSINESS_CONTACT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'updated'=>$updated]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
     }
 }
