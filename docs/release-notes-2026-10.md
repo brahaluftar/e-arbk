@@ -6,7 +6,7 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 
 1. **Rotate the production secrets.** `config/.env` with the production database password and `APP_KEY` was committed to Git. It is deleted in this release and ignored from now on, but it remains in the Git history: change the SQL login password and `APP_KEY` in `/cloudclusters/arbk-env/.env`, and purge the file from history if the repository was ever shared.
 2. Back up the database. Migration `0026_billing_consistency_and_finance.sql` is additive but cannot be rolled back automatically.
-3. Deploy as usual (`deploy-arbk.sh … deploy`). The migration runs, then preflight checks the new views and the PDF fonts.
+3. Deploy as usual (`deploy-arbk.sh … deploy`), or directly from GitHub with `deploy/deploy-from-github.sh deploy --ref main` ([guide](deploy-from-github.md)). The migration runs, then preflight checks the new views and the PDF fonts.
 4. Optional new settings in `/cloudclusters/arbk-env/.env` (defaults are fine):
 
 | Key | Default | Meaning |

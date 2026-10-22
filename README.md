@@ -17,6 +17,7 @@ edit is needed when switching computers. See [working on two computers](docs/loc
 for setup, shared folders, and machine-specific overrides.
 
 For production, use `public/` as the website document root and follow [docs/production-deployment.md](docs/production-deployment.md).
+To deploy directly from GitHub on the CloudClusters Ubuntu server, use `deploy/deploy-from-github.sh` — see [docs/deploy-from-github.md](docs/deploy-from-github.md).
 
 Production environment settings live in `/cloudclusters/arbk-env/.env`, outside
 the application directory. The loader automatically uses this file when its
