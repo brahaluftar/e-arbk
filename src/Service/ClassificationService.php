@@ -23,7 +23,7 @@ final class ClassificationService
             $this->pdo->prepare('UPDATE dbo.ARBK_LIST SET NACE_CODE_TARIFF=:code,nace_veprimtaria_tariff=:activity,NaceRowGuid=CONVERT(uniqueidentifier,:guid) WHERE REGULATION_ID=:business')->execute(['code'=>trim((string)$row['NACE_CODE']),'activity'=>trim((string)$row['Veprimtaria']),'guid'=>$mappingKey,'business'=>$businessId]);
             $this->audit->record($userId,'NACE_MANUAL_ASSIGNMENT','BUSINESS',(string)$businessId,$previous,['mapping_key'=>$mappingKey,'category'=>$category,'tariff'=>$row['tariff']]);
             $this->pdo->commit();
-        } catch(\Throwable $e){$this->pdo->rollBack();throw $e;}
+        } catch(\Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
     }
 
     public function autoAssign(): int

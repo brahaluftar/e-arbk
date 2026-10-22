@@ -10,7 +10,7 @@ use Throwable;
 
 final class InvoiceAppealService
 {
-    private const TRANSITIONS=['SUBMITTED'=>['ACCEPTED','REJECTED'],'ACCEPTED'=>['COORDINATOR'],'COORDINATOR'=>['COMMISSION'],'COMMISSION'=>['UNDER_REVIEW'],'UNDER_REVIEW'=>['DECIDED'],'DECIDED'=>['ANSWERED']];
+    public const TRANSITIONS=['SUBMITTED'=>['ACCEPTED','REJECTED'],'ACCEPTED'=>['COORDINATOR'],'COORDINATOR'=>['COMMISSION'],'COMMISSION'=>['UNDER_REVIEW'],'UNDER_REVIEW'=>['DECIDED'],'DECIDED'=>['ANSWERED']];
     public function __construct(private PDO $pdo,private AuditLogger $audit) {}
 
     public function submit(int $invoiceId,int $userId,string $subject,string $text): int

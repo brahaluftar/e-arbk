@@ -12,7 +12,9 @@ final class PortalRepository
     /** @return list<array<string,mixed>> */
     public function businesses(int $userId): array
     {
-        $statement=$this->pdo->prepare("SELECT a.REGULATION_ID id,a.Emri legal_name,a.NRBIZ registration_number,a.NUMRI_FISKAL fiscal_number,a.ADRESA address,a.NACE_CODE_REG nace_code
+        $statement=$this->pdo->prepare("SELECT a.REGULATION_ID id,a.Emri legal_name,a.NRBIZ registration_number,a.NUMRI_FISKAL fiscal_number,a.ADRESA address,a.NACE_CODE_REG nace_code,
+                (SELECT COALESCE(SUM(b.outstanding),0) FROM dbo.v_invoice_balance b WHERE b.business_id=a.REGULATION_ID) outstanding,
+                (SELECT COUNT(*) FROM dbo.business_units u WHERE u.business_id=a.REGULATION_ID AND u.is_active=1) unit_count
             FROM dbo.business_user_links l JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=l.business_id
             WHERE l.user_id=:user AND l.ended_at IS NULL ORDER BY a.Emri,a.REGULATION_ID");
         $statement->execute(['user'=>$userId]);return $statement->fetchAll();
@@ -30,13 +32,10 @@ final class PortalRepository
     /** @return list<array<string,mixed>> */
     public function invoices(int $userId): array
     {
-        $statement=$this->pdo->prepare("SELECT i.id,i.invoice_number,i.uniref,i.fiscal_year,i.amount,i.currency,i.issued_on,i.due_on,i.status_code,i.pdf_storage_key,a.Emri business_name,a.NRBIZ registration_number,
-                COALESCE(SUM(p.amount),0) paid_amount,i.amount-COALESCE(SUM(p.amount),0) outstanding
+        $statement=$this->pdo->prepare("SELECT i.id,i.invoice_number,i.uniref,i.fiscal_year,i.amount,i.currency,i.issued_on,i.due_on,b.status_code,i.business_name_snapshot business_name,a.NRBIZ registration_number,b.paid_amount,b.outstanding
             FROM dbo.business_user_links l JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=l.business_id
-            JOIN dbo.business_invoices i ON i.business_id=a.REGULATION_ID
-            LEFT JOIN dbo.business_invoice_payments p ON p.invoice_id=i.id
+            JOIN dbo.business_invoices i ON i.business_id=a.REGULATION_ID JOIN dbo.v_invoice_balance b ON b.invoice_id=i.id
             WHERE l.user_id=:user AND l.ended_at IS NULL
-            GROUP BY i.id,i.invoice_number,i.uniref,i.fiscal_year,i.amount,i.currency,i.issued_on,i.due_on,i.status_code,i.pdf_storage_key,a.Emri,a.NRBIZ
             ORDER BY i.issued_on DESC,i.id DESC");
         $statement->execute(['user'=>$userId]);return $statement->fetchAll();
     }
@@ -44,7 +43,7 @@ final class PortalRepository
     /** @return list<array<string,mixed>> */
     public function permits(int $userId): array
     {
-        $statement=$this->pdo->prepare("SELECT p.id,p.serial_number,p.issued_on,p.valid_from,p.valid_until,p.status_code,p.pdf_storage_key,p.business_name_snapshot business_name,a.NRBIZ registration_number
+        $statement=$this->pdo->prepare("SELECT p.id,p.serial_number,p.issued_on,p.valid_from,p.valid_until,CASE WHEN p.status_code='ACTIVE' AND p.valid_until<CONVERT(date,SYSDATETIME()) THEN 'EXPIRED' ELSE p.status_code END status_code,p.pdf_storage_key,p.business_name_snapshot business_name,a.NRBIZ registration_number
             FROM dbo.business_user_links l JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=l.business_id
             JOIN dbo.business_permits p ON p.business_id=a.REGULATION_ID
             WHERE l.user_id=:user AND l.ended_at IS NULL ORDER BY p.issued_on DESC,p.id DESC");

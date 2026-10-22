@@ -1,8 +1,7 @@
 <?php
 declare(strict_types=1);
 $app=require dirname(__DIR__,3).'/bootstrap.php';
-$user=$app['auth']->requireRole(['ADMIN','OFFICIAL']);
-if($_SERVER['REQUEST_METHOD']!=='POST'||!$app['csrf']->verify($_POST['_csrf']??null)){http_response_code(400);exit('Invalid request.');}
+$user=$app['auth']->requireEditor();require_post();
 $businessId=filter_var($_POST['business_id']??null,FILTER_VALIDATE_INT);$mapping=strtoupper(trim((string)($_POST['mapping_key']??'')));
 $returnPath=business_list_path($_POST['return']??'');$returnQuery=(string)(parse_url($returnPath,PHP_URL_QUERY)??'');$detailPath='/admin/businesses/view.php?id='.(int)$businessId.($returnQuery===''?'':'&return='.rawurlencode($returnQuery));
 if(!$businessId||preg_match('/\A[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\z/',$mapping)!==1){flash('error','Zgjedhja nuk është e vlefshme.');redirect($businessId?$detailPath:$returnPath);}

@@ -6,6 +6,8 @@
 **Document date:** 2026-10-22
 **Status:** Reference baseline for upgrade versions, user manuals and installation packages
 
+> **Implementation status (October 2026):** most of sections 15–17 and eight new finance features are implemented on branch `feature/bugfixes-and-proposals` — see [§20](#20-implementation-status) and the [release notes](release-notes-2026-10.md). Where the code changed, sections 5, 7, 9 and 10 below describe the new state; §20 lists what is still open.
+
 > Use this document as the single technical reference. Sections 1–14 describe the system **as it is now** and were checked against the source code. Sections 15–18 are **proposals**: bug fixes, simplification, and a UI/responsive redesign. Every bug in section 15 has a source location so you can verify it before you fix it.
 
 ---
@@ -31,6 +33,7 @@
 17. [Proposal C — Simplified, fully responsive UI](#17-proposal-c--simplified-fully-responsive-ui)
 18. [Upgrade roadmap](#18-upgrade-roadmap)
 19. [Appendices](#19-appendices)
+20. [Implementation status](#20-implementation-status)
 
 ---
 
@@ -286,6 +289,8 @@ Accessors: `string()`, `int()`, `bool()` (uses `FILTER_VALIDATE_BOOL`), and `bas
 | `MUNICIPALITY_NAME` | `KOMUNA E PRISHTINËS` | Printed on PDFs | required |
 | `MUNICIPALITY_ADDRESS` / `MUNICIPALITY_CONTACT` / `MUNICIPAL_BANK_ACCOUNT` | empty | Invoice footer (address, email/contact, IBAN) | required |
 | `INVOICE_LEGAL_TEXT` | Albanian legal sentence | Invoice footer text | — |
+| `BILLING_TARIFF_SOURCES` | `DISCOUNT,REGISTERED` | Tariff sources for annual invoicing and the income estimate (`DISCOUNT`, `REGISTERED`, `CLASSIFICATION`) — one rule, see `BillingPolicy` | — |
+| `MUNICIPALITY_NAME_EN` / `_SR`, `INVOICE_LEGAL_TEXT_EN` / `_SR` | empty (built-in texts) | English / Serbian invoice texts | — |
 
 Process-only variables: `ARBK_ENV_FILE` (explicit env file) and `ARBK_COMPLETION_FILE` (`migrate.php` and `preflight-production.php` write `complete` to it on success; `deploy.sh` uses it).
 
@@ -528,6 +533,7 @@ COALESCE(s.status_code, CASE WHEN a.ATK_MBYLLUR = 1 THEN 'DEACTIVATED' ELSE 'ACT
 | 0023 | business_access_requests | Access requests |
 | 0024 | business_contacts_and_units | `MENAXHERI`, `NUMRI_TELEFONIT`, CONTACTS import, `business_units`, per-unit invoice uniqueness |
 | 0025 | business_unit_contacts_and_import | Unit email/manager, UNITS import, unit identity index |
+| 0026 | billing_consistency_and_finance | Payment storno columns; `business_invoice_events` (history with comments); `payment_import_batches` / `payment_import_rows` (Finance Directorate reports); job items get `id` + `business_unit_id`; views `v_invoice_balance` and `v_business_billing`; invoice status backfill; cached PDF keys cleared |
 
 **Runner** (`bin/migrate.php`): creates `schema_migrations` if it is missing; runs each pending `*.sql` in name order; splits batches on lines that contain only `GO`; wraps **each file** in one transaction; records the file name.
 
@@ -839,6 +845,27 @@ Legend: **A** ADMIN, **O** OFFICIAL, **R** READ_ONLY, **B** BUSINESS, **P** publ
 | `/portal/permits.php` | GET | B | — | My permits |
 | `/portal/permit-pdf.php` | GET | B (linked) | `id` | Permit PDF |
 | `/portal/appeals.php` | GET, POST | B | `invoice_id`, `subject`, `appeal_text` | Submit or list appeals |
+
+**Added in the October 2026 release** (all ADMIN unless noted):
+
+| Path | Method | Purpose |
+| --- | --- | --- |
+| `/admin/finance/annual.php` | GET | Annual invoicing jobs (moved from the finance page) |
+| `/admin/finance/invoice.php?id=` | GET | Invoice detail: totals with previous debt, payments with storno, edit/cancel with comment, email, history |
+| `/admin/finance/update-invoice.php` | POST | `action=edit|cancel|restore`, mandatory `comment` |
+| `/admin/finance/reverse-payment.php` | POST | Storno a payment (`payment_id`, `reason`) |
+| `/admin/finance/payments.php` | GET | Payment report upload, imported reports, manual payment search, recent payments |
+| `/admin/finance/import-payments.php` | POST (multipart) | Process a daily payment report (`report`, XLSX/CSV) |
+| `/admin/finance/payment-import.php?id=` | GET | Rows of a payment report (review or all) |
+| `/admin/finance/payment-template.php` | GET | Template workbook for payment reports |
+| `/admin/finance/obligations-export.php?year=` | GET | Excel of clients with unpaid amounts |
+| `/admin/finance/invoice-pdf.php?id=&lang=` | GET (staff) | Invoice PDF in `sq`, `en` or `sr` |
+| `/admin/finance/bulk-pdf.php?year=&part=` | GET | Bulk PDF in parts of 500 |
+| `/admin/permits/revoke.php` | POST (A, O) | Revoke a permit with a reason |
+| `/admin/permits/pdf.php?id=` | GET (staff) | Download an issued permit |
+| `/admin/imports/retry.php` | POST | Re-queue a failed import |
+
+Removed: `/admin/finance/generate-unit-invoices.php` (units are part of the annual job). `/admin/businesses/classification.php` now redirects to the register with the "Pa klasifikim" tab.
 
 ---
 
@@ -1674,3 +1701,23 @@ button,.button{min-height:var(--tap);font:inherit;font-weight:700}
 - [ ] `deploy.sh`, `deploy-arbk.sh`, `install-cron.sh`, `100-arbk.conf`, `manage-apache-vhosts.awk`
 - [ ] Release notes listing the new migrations and configuration keys
 - [ ] This LLD updated for the release
+
+---
+
+## 20. Implementation status
+
+Status on branch `feature/bugfixes-and-proposals` (October 2026). Details: [release notes](release-notes-2026-10.md).
+
+**Bugs (§15):** B-01 to B-36 are fixed, except **B-29** (email `ACTION_COMPLETED` / Graph message id are still not recorded). B-01 also requires rotating the leaked credentials, which only an operator can do.
+
+**Simplification (§16):**
+
+| Done | Partly done | Open |
+| --- | --- | --- |
+| S-05, S-06, S-07, S-08, S-09, S-10, S-11, S-13, S-15, S-16, S-17, S-18 (bulk PDF in parts), S-19, S-22 | S-03 (CLI no longer starts sessions; one bootstrap file remains), S-12 (new repositories; some controller SQL remains) | S-01/S-02 (front controller, container), S-04 (generic worker queue), S-14 (schema tidy-up), S-20 (sync button), S-21, S-23 |
+
+**UI (§17):** implemented — tokens, single stylesheet, grouped navigation with a no-JavaScript menu, compact page headers, filters collapsed on phones, labelled card tables below 1024 px, Albanian status labels, timeline, responsive chart. Verified by `composer ui-check` (17 screens × 3 viewports, no horizontal scroll). Not done: dark mode, print stylesheet beyond the basics, "keep the typed values after a validation error" on every form.
+
+**New finance features:** payment report import, previous debt / invoice total / total obligations, larger barcode text, Albanian/English/Serbian invoices, clients-with-debt Excel, invoice edit/cancel with mandatory comment and history, payment storno, permit only without debt, unit registration and invoicing (including annual jobs).
+
+**Verification limits:** PHP lint, 52 PHPUnit tests and the UI render/screenshot check pass. SQL Server was not available, so migration 0026 and the new queries must be run against a staging copy before production.

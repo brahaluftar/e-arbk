@@ -1,15 +1,16 @@
+# Used only when the project root itself is served (e.g. http://localhost/arbk on XAMPP).
+# Production serves public/ as the document root and does not read this file.
 Options -Indexes
 DirectoryIndex index.php
 <FilesMatch "^(\.env.*|composer\.(json|lock)|phpunit\.xml)$">
     Require all denied
 </FilesMatch>
 RewriteEngine On
-RewriteRule ^(?:bin|config|database|deploy|docs|src|templates|tests|var|vendor)(?:/|$) - [F,L,NC]
+RewriteRule ^(?:bin|config|database|deploy|docs|resources|src|templates|tests|var|vendor)(?:/|$) - [F,L,NC]
 RewriteRule ^admin/dashboard/?$ public/admin/dashboard.php [L,QSA]
-RewriteRule ^admin/businesses/classification/?$ public/admin/businesses/classification.php [L,QSA]
+RewriteRule ^admin/businesses/classification/?$ public/admin/businesses/index.php?classification=UNCLASSIFIED [L,QSA]
 RewriteRule ^admin/businesses/([0-9]+)/?$ public/admin/businesses/view.php?id=$1 [L,QSA]
 RewriteRule ^admin/businesses/?$ public/admin/businesses/index.php [L,QSA]
-RewriteRule ^admin/(.*\.php)$ public/admin/$1 [L,QSA,NC]
-RewriteRule ^auth/(.*)$ public/auth/$1 [L,QSA]
-RewriteRule ^assets/(.*)$ public/assets/$1 [L,QSA]
-RewriteRule ^health\.php$ public/health.php [L,QSA]
+# Everything else that is not already under public/ is served from public/ (portal, auth, assets, message links, verification).
+RewriteCond %{REQUEST_URI} !/public/
+RewriteRule ^(.+)$ public/$1 [L,QSA]

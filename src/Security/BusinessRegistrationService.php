@@ -10,10 +10,13 @@ use Throwable;
 
 final class BusinessRegistrationService
 {
+    /** Invitation lifetime; the emailed action link uses the same number of days. */
+    public const INVITE_DAYS = 7;
+
     public function __construct(private PDO $pdo,private AuditLogger $audit) {}
 
-    /** @return array{token:string,email:string} */
-    public function invite(string $email,int $actorId,int $ttlHours=168): array
+    /** @return array{id:int,token:string,email:string} */
+    public function invite(string $email,int $actorId,int $ttlHours=self::INVITE_DAYS*24): array
     {
         $email=trim($email);if(filter_var($email,FILTER_VALIDATE_EMAIL)===false)throw new DomainException('Emaili nuk është valid.');
         $token=rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'=');$hash=hash('sha256',$token);
@@ -22,7 +25,7 @@ final class BusinessRegistrationService
         $inviteId=(int)$statement->fetchColumn();
         $statement->closeCursor();
         $this->audit->record($actorId,'BUSINESS_REGISTRATION_INVITED','BUSINESS_REGISTRATION_INVITE',(string)$inviteId,null,['email'=>$email]);
-        return ['token'=>$token,'email'=>$email];
+        return ['id'=>$inviteId,'token'=>$token,'email'=>$email];
     }
 
     /** @return array{email:string}|null */

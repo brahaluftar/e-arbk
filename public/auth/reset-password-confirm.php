@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $app = require dirname(__DIR__, 2) . '/bootstrap.php';
-if ($app['auth']->user() !== null) redirect('/admin/dashboard.php');
+if ($app['auth']->user() !== null) redirect(App\Security\Auth::landingPath($app['auth']->user()));
 header('Cache-Control: no-store');
 header('Referrer-Policy: no-referrer');
 $token = is_string($_POST['token'] ?? null) ? $_POST['token'] : (is_string($_GET['token'] ?? null) ? $_GET['token'] : '');

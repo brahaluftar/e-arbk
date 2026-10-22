@@ -9,3 +9,9 @@
 *.sqlbak
 /.phpunit.cache/
 /dist/
+# Never commit environment files; only the *.example templates belong in Git.
+/config/.env
+**/.env
+!.env.example
+!.env.production.example
+/var/ui-check/

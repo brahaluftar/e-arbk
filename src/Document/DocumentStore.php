@@ -14,6 +14,13 @@ final class DocumentStore
         if(file_put_contents($path,$pdf,LOCK_EX)!==strlen($pdf))throw new RuntimeException('Dokumenti PDF nuk mund të ruhej.');
         chmod($path,0660);return $category.'/'.$year.'/'.$name;
     }
+    /** Removes a stored document, for example after a failed database insert. */
+    public function delete(string $key): void
+    {
+        try { $path=$this->path($key); } catch (RuntimeException) { return; }
+        @unlink($path);
+    }
+
     public function path(string $key): string
     {
         if(preg_match('~\A(?:invoices|permits)/[0-9]{4}/[a-f0-9]{48}\.pdf\z~',$key)!==1)throw new RuntimeException('Referenca e dokumentit nuk është valide.');

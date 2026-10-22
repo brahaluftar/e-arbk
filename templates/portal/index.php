@@ -1,4 +1,26 @@
-<section class="hero"><h1>Bizneset e mia</h1><p>Bizneset e aprovuara nga zyrtarët komunalë.</p></section>
-<section class="panel"><h2>Shto biznes</h2><p>Shënoni numrin unik të biznesit. Qasja aktivizohet pasi zyrtari komunal ta verifikojë dhe aprovojë kërkesën.</p><form method="post" action="<?=e(app_url('/portal/business-request.php'))?>"><input type="hidden" name="_csrf" value="<?=e($csrf->token())?>"><div class="filters"><label class="field">Numri unik i biznesit (NRBIZ)<input name="registration_number" maxlength="50" required autocomplete="off"></label><button>Dërgo për aprovim</button></div></form></section>
-<section class="panel"><h2>Lidhjet aktive</h2><div class="table-wrap"><table><thead><tr><th>Biznesi</th><th>NRBIZ</th><th>Numri fiskal</th><th>Adresa</th><th>NACE</th></tr></thead><tbody><?php foreach($businesses as $business):?><tr><td><?=e($business['legal_name'])?></td><td><?=e($business['registration_number'])?></td><td><?=e($business['fiscal_number']??'—')?></td><td><?=e($business['address']??'—')?></td><td><?=e($business['nace_code']??'—')?></td></tr><?php endforeach;?></tbody></table><?php if($businesses===[]):?><div class="empty">Ende nuk është aprovuar asnjë lidhje me biznes.</div><?php endif;?></div></section>
-<section class="panel"><h2>Kërkesat e mia</h2><div class="table-wrap"><table><thead><tr><th>Biznesi</th><th>NRBIZ</th><th>Statusi</th><th>Data</th><th>Shënimi</th></tr></thead><tbody><?php foreach($requests as $request):?><tr><td><?=e($request['legal_name'])?></td><td><?=e($request['registration_number'])?></td><td><span class="badge <?=e($request['status_code'])?>"><?=e($request['status_code'])?></span></td><td><?=e($request['requested_at'])?></td><td><?=e($request['review_note']??'—')?></td></tr><?php endforeach;?></tbody></table><?php if($requests===[]):?><div class="empty">Nuk keni kërkesa për lidhje.</div><?php endif;?></div></section>
+<div class="page-head"><div><h1>Bizneset e mia</h1><p>Bizneset e aprovuara nga Komuna dhe gjendja e detyrimeve.</p></div><div class="page-actions"><a class="btn" href="<?=e(app_url('/portal/invoices.php'))?>">Faturat</a></div></div>
+<?php if($businesses===[]):?><section class="card empty">Ende nuk është aprovuar asnjë lidhje me biznes. Dërgoni kërkesë më poshtë.</section><?php else:?>
+<section class="kpis">
+  <?php foreach($businesses as $business): $debt=(float)$business['outstanding'];?>
+  <div class="kpi <?=$debt>0?'kpi--danger':'kpi--success'?>"><span><?=e($business['legal_name'])?></span><strong><?=e(money($debt))?></strong><small>NRB <?=e($business['registration_number'])?> · <?=$debt>0?'detyrime të papaguara':'pa detyrime'?><?=(int)$business['unit_count']>0?' · '.(int)$business['unit_count'].' njësi':''?></small></div>
+  <?php endforeach;?>
+</section>
+<?php endif;?>
+<section class="card">
+  <h2>Shto biznes</h2>
+  <p class="help">Shënoni numrin unik të biznesit. Qasja aktivizohet pasi zyrtari komunal ta verifikojë kërkesën.</p>
+  <form method="post" action="<?=e(app_url('/portal/business-request.php'))?>" class="form-grid disclosure"><?=csrf_field()?><label class="field">Numri unik i biznesit (NRBIZ)<input name="registration_number" maxlength="50" required autocomplete="off" inputmode="numeric"></label><div class="form-actions"><button>Dërgo për aprovim</button></div></form>
+</section>
+<?php if($requests!==[]):?>
+<section class="card"><h2>Kërkesat e mia</h2>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>Biznesi</th><th>Statusi</th><th>Data</th><th>Shënimi</th></tr></thead>
+    <tbody><?php foreach($requests as $request):?><tr>
+      <td><span class="cell-title"><?=e($request['legal_name'])?></span><span class="cell-sub">NRB <?=e($request['registration_number'])?></span></td>
+      <td data-label="Statusi"><?=badge('access',$request['status_code'])?></td>
+      <td data-label="Data"><?=e(datetime_sq($request['requested_at']))?></td>
+      <td data-label="Shënimi"><?=e($request['review_note']??'—')?></td>
+    </tr><?php endforeach;?></tbody>
+  </table></div>
+</section>
+<?php endif;?>

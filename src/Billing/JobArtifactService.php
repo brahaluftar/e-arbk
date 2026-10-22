@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace App\Billing;
 use App\Document\JobArtifactStore;
 use App\Export\XlsxWriter;
+use App\Repository\InvoiceRepository;
 use App\Support\Config;
 use PDO;
 use RuntimeException;
@@ -19,7 +20,7 @@ final class JobArtifactService
     }
     private function pdf(int $jobId,string $path):int
     {
-        $q=$this->pdo->prepare("SELECT i.*,a.EMAIL business_email,COALESCE(p.paid_amount,0) paid_amount FROM dbo.annual_invoice_job_items ji JOIN dbo.business_invoices i ON i.id=ji.invoice_id JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id OUTER APPLY(SELECT SUM(bp.amount) paid_amount FROM dbo.business_invoice_payments bp WHERE bp.invoice_id=i.id)p WHERE ji.job_id=:job AND ji.status_code='CREATED' ORDER BY i.id");$q->execute(['job'=>$jobId]);$pdf=new \FPDF('P','mm','A4');$pdf->SetCompression(true);$renderer=new InvoicePdfRenderer($this->config);$count=0;while($invoice=$q->fetch(PDO::FETCH_ASSOC)){$renderer->append($pdf,$invoice);$count++;}$q->closeCursor();if($count>0)$pdf->Output('F',$path);return $count;
+        $q=$this->pdo->prepare(InvoiceRepository::documentSelect()." WHERE EXISTS(SELECT 1 FROM dbo.annual_invoice_job_items ji WHERE ji.invoice_id=i.id AND ji.job_id=:job AND ji.status_code='CREATED') ORDER BY i.id");$q->execute(['job'=>$jobId]);$pdf=new \FPDF('P','mm','A4');$pdf->SetCompression(true);$renderer=new InvoicePdfRenderer($this->config);$count=0;while($invoice=$q->fetch(PDO::FETCH_ASSOC)){$renderer->append($pdf,$invoice);$count++;}$q->closeCursor();if($count>0)$pdf->Output('F',$path);return $count;
     }
     private function xlsx(int $jobId,string $path):void
     {

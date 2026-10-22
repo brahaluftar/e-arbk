@@ -56,4 +56,29 @@ final class FinancialLedgerServiceTest extends TestCase
         $this->expectException(DomainException::class);
         $this->service($pdo)->createInvoice(array_replace($this->invoiceInput(),['amount'=>'10000000000000000.00']),1);
     }
+
+    public function testInvoiceEditWithoutCommentIsRejectedBeforeWriting(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $pdo->expects(self::never())->method('beginTransaction');
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Koment');
+        $this->service($pdo)->updateInvoice(5,['amount'=>'100.00','due_on'=>'','notes'=>'','comment'=>'   '],1);
+    }
+
+    public function testCancellationRequiresAComment(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $pdo->expects(self::never())->method('beginTransaction');
+        $this->expectException(DomainException::class);
+        $this->service($pdo)->setCancelled(5,true,'',1);
+    }
+
+    public function testPaymentReversalRequiresAReason(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $pdo->expects(self::never())->method('beginTransaction');
+        $this->expectException(DomainException::class);
+        $this->service($pdo)->reversePayment(9,'',1);
+    }
 }

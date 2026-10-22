@@ -10,7 +10,9 @@ use Throwable;
 /** Logical, fresh-database transfer of the application's SQL Server objects. */
 final class DatabaseTransfer
 {
-    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items'];
+    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
+    /** Views recreated after the data, in dependency order. */
+    public const VIEWS = ['v_business_master','v_invoice_balance','v_business_billing'];
     private const JSON = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
     public static function quote(string $name): string { return '['.str_replace(']',']]', $name).']'; }
@@ -70,9 +72,11 @@ final class DatabaseTransfer
                     $manifest['after'][]='ALTER TABLE dbo.'.self::quote($table).' WITH CHECK ADD CONSTRAINT '.self::quote($fk['name']).' FOREIGN KEY('.$source.') REFERENCES dbo.'.self::quote($fk['referenced_table']).'('.$target.') ON DELETE '.str_replace('_',' ',$fk['delete_action']).' ON UPDATE '.str_replace('_',' ',$fk['update_action']).';';
                 }
             }
-            $view=$pdo->query("SELECT OBJECT_DEFINITION(OBJECT_ID('dbo.v_business_master'))")->fetchColumn();
-            if (!is_string($view) || $view==='') throw new RuntimeException('Business view definition is unavailable.');
-            $manifest['after'][]=preg_replace('/\b(?:CREATE\s+OR\s+ALTER|ALTER)\s+VIEW\b/i','CREATE VIEW',$view,1);
+            foreach (self::VIEWS as $viewName) {
+                $view=$pdo->query("SELECT OBJECT_DEFINITION(OBJECT_ID('dbo.".$viewName."'))")->fetchColumn();
+                if (!is_string($view) || $view==='') throw new RuntimeException('View definition is unavailable: '.$viewName);
+                $manifest['after'][]=preg_replace('/\b(?:CREATE\s+OR\s+ALTER|ALTER)\s+VIEW\b/i','CREATE VIEW',$view,1);
+            }
             foreach ($pdo->query('SELECT id,storage_path,file_sha256 FROM dbo.business_import_runs')->fetchAll() as $run) {
                 $relative=str_replace('\\','/',(string)$run['storage_path']);
                 if (preg_match('~\Avar/imports/([a-f0-9]{32}\.xlsx)\z~D',$relative,$m)!==1) throw new RuntimeException('Import file path is not portable for run '.$run['id']);
