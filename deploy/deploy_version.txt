@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /cloudclusters
+
+VERSION="20261016-business-list2"
+ZIP="e-arbk-code-${VERSION}.zip"
+
+sha256sum -c "${ZIP}.sha256"
+chmod +x deploy-arbk.sh
+
+./deploy-arbk.sh "/cloudclusters/${ZIP}" deploy
+
+echo "Deployment completed successfully."
