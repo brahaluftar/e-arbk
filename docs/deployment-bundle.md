@@ -198,6 +198,20 @@ For a code-only release when production already has the database, use:
 powershell -ExecutionPolicy Bypass -File deploy/build-code-package.ps1 -Version VERSION
 ```
 
+On Linux or macOS (same package format; needs PHP, Composer, Python 3 and `sha256sum`):
+
+```bash
+bash deploy/build-code-package.sh VERSION      # e.g. 2026.10.22
+```
+
+On the server, after uploading the ZIP, its `.sha256`, `deploy-arbk.sh` and `deploy-simple.sh` to `/cloudclusters/`:
+
+```bash
+bash /cloudclusters/deploy-simple.sh VERSION    # checksum, install, migrate, preflight, activate, cron
+```
+
+To deploy straight from GitHub instead of uploading a ZIP, see [deploy-from-github.md](deploy-from-github.md).
+
 This creates `dist/e-arbk-code-VERSION.zip` without a database snapshot or import
 workbooks. The application migration SQL files are retained so `migrate` can apply
 schema changes to the existing production database. Upload the ZIP, its `.sha256`
