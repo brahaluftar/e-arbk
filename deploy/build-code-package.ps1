@@ -9,7 +9,7 @@ $archivePath = Join-Path $rootPath "dist\$bundleName.zip"
 if ($Version.Contains('..') -or (Test-Path -LiteralPath $bundlePath) -or (Test-Path -LiteralPath $archivePath)) { throw 'Use a new release identifier.' }
 $appPath = Join-Path $bundlePath 'app'
 New-Item -ItemType Directory -Path $appPath -Force | Out-Null
-foreach ($directory in @('bin','config','public','src','templates')) {
+foreach ($directory in @('bin','config','public','resources','src','templates')) {
     Copy-Item -LiteralPath (Join-Path $rootPath $directory) -Destination $appPath -Recurse
 }
 # Environment files are machine-specific secrets and must never enter a release.

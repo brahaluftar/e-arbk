@@ -1,28 +1,46 @@
 <?php
 declare(strict_types=1);
 namespace App\Billing;
-use App\Document\DocumentStore;
+use App\Repository\InvoiceRepository;
 use App\Support\Config;
+use DomainException;
 use PDO;
 use RuntimeException;
-use setasign\Fpdi\Fpdi;
-use setasign\Fpdi\PdfParser\StreamReader;
+
+/**
+ * Invoice PDFs are rendered on demand so that status, paid amount and previous debt are always current.
+ */
 final class InvoiceDocumentService
 {
-    public function __construct(private PDO $pdo,private Config $config,private DocumentStore $store){}
-    public function ensure(int $invoiceId):string
+    public const BULK_PAGE_SIZE = 500;
+
+    public function __construct(private PDO $pdo,private Config $config){}
+
+    public function render(int $invoiceId,string $language='sq'):string
     {
-        $invoice=$this->invoice($invoiceId);$existing=(string)($invoice['pdf_storage_key']??'');if($existing!==''){try{$this->store->path($existing);return $existing;}catch(RuntimeException){}}
-        if(empty($invoice['uniref']))throw new RuntimeException('Fatura e vjetër nuk ka UNIREF dhe nuk mund të gjenerohet në formatin e ri.');
-        $key=$this->store->put('invoices',(new InvoicePdfRenderer($this->config))->render($invoice));$statement=$this->pdo->prepare('UPDATE dbo.business_invoices SET pdf_storage_key=:key WHERE id=:id AND pdf_storage_key IS NULL');$statement->execute(['key'=>$key,'id'=>$invoiceId]);return $key;
+        $invoice=(new InvoiceRepository($this->pdo))->document($invoiceId);
+        if($invoice===null)throw new DomainException('Fatura nuk u gjet.');
+        if(empty($invoice['uniref']))throw new DomainException('Kjo faturë e vjetër nuk ka UNIREF; PDF-ja nuk mund të krijohet.');
+        return (new InvoicePdfRenderer($this->config))->render($invoice,$language);
     }
-    /** @param list<int> $invoiceIds */
-    public function bulk(array $invoiceIds):string
+
+    /** Number of bulk PDF parts for a fiscal year. */
+    public function bulkParts(int $year):int
     {
-        if($invoiceIds===[]||count($invoiceIds)>1000)throw new RuntimeException('Zgjidhni 1–1000 fatura për PDF-në masive.');$combined=new Fpdi();
-        foreach(array_values(array_unique($invoiceIds)) as $id){$pdf=file_get_contents($this->store->path($this->ensure((int)$id)));if(!is_string($pdf))throw new RuntimeException('Fatura PDF nuk mund të lexohej.');$pages=$combined->setSourceFile(StreamReader::createByString($pdf));for($page=1;$page<=$pages;$page++){$template=$combined->importPage($page);$size=$combined->getTemplateSize($template);$combined->AddPage($size['orientation'],[$size['width'],$size['height']]);$combined->useTemplate($template);}}
-        $output=$combined->Output('S');if(!is_string($output)||!str_starts_with($output,'%PDF-'))throw new RuntimeException('PDF-ja masive nuk mund të krijohej.');return $output;
+        $statement=$this->pdo->prepare('SELECT COUNT_BIG(*) FROM dbo.business_invoices WHERE fiscal_year=:year AND uniref IS NOT NULL');$statement->execute(['year'=>$year]);
+        return (int)ceil((int)$statement->fetchColumn()/self::BULK_PAGE_SIZE);
     }
-    /** @return array<string,mixed> */
-    private function invoice(int $id):array{$statement=$this->pdo->prepare('SELECT i.*,a.EMAIL business_email,COALESCE(p.paid_amount,0) paid_amount FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id OUTER APPLY(SELECT SUM(bp.amount) paid_amount FROM dbo.business_invoice_payments bp WHERE bp.invoice_id=i.id)p WHERE i.id=:id');$statement->execute(['id'=>$id]);$row=$statement->fetch();if(!is_array($row))throw new RuntimeException('Fatura nuk u gjet.');return $row;}
+
+    /** One PDF with up to BULK_PAGE_SIZE invoices of the year (part 1, 2, …). */
+    public function bulk(int $year,int $part,string $language='sq'):string
+    {
+        $part=max(1,$part);$offset=($part-1)*self::BULK_PAGE_SIZE;$size=self::BULK_PAGE_SIZE;
+        $statement=$this->pdo->prepare(InvoiceRepository::documentSelect()." WHERE i.fiscal_year=:year AND i.uniref IS NOT NULL ORDER BY i.id OFFSET $offset ROWS FETCH NEXT $size ROWS ONLY");
+        $statement->execute(['year'=>$year]);
+        $pdf=new \FPDF('P','mm','A4');$pdf->SetCompression(true);$renderer=new InvoicePdfRenderer($this->config);$count=0;
+        while($invoice=$statement->fetch(PDO::FETCH_ASSOC)){$renderer->append($pdf,$invoice,$language);$count++;}
+        $statement->closeCursor();
+        if($count===0)throw new DomainException('Nuk ka fatura me UNIREF për këtë pjesë.');
+        $output=$pdf->Output('S');if(!is_string($output)||!str_starts_with($output,'%PDF-'))throw new RuntimeException('PDF-ja masive nuk mund të krijohej.');return $output;
+    }
 }

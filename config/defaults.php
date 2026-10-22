@@ -5,7 +5,7 @@ return [
     'APP_ENV' => 'development',
     'APP_DEBUG' => 'false',
     'APP_URL' => 'http://localhost/arbk',
-    'APP_TIMEZONE' => 'Europe/Warsaw',
+    'APP_TIMEZONE' => 'Europe/Belgrade',
     'APP_SESSION_NAME' => 'arbk_admin',
     'APP_KEY' => '',
     'GRAPH_TENANT_ID' => '',
@@ -35,7 +35,14 @@ return [
     'IMPORT_MAX_BYTES' => '157286400',
     'INVOICE_DUE_DAYS' => '30',
     'ANNUAL_INVOICE_BATCH_SIZE' => '200',
+    // Which tariff sources the annual invoice job and the income estimate use (see BillingPolicy).
+    'BILLING_TARIFF_SOURCES' => 'DISCOUNT,REGISTERED',
     'MUNICIPALITY_NAME' => 'KOMUNA E PRISHTINËS',
+    // Optional translations for English / Serbian invoices; built-in texts are used when empty.
+    'MUNICIPALITY_NAME_EN' => '',
+    'MUNICIPALITY_NAME_SR' => '',
+    'INVOICE_LEGAL_TEXT_EN' => '',
+    'INVOICE_LEGAL_TEXT_SR' => '',
     'MUNICIPALITY_ADDRESS' => '',
     'MUNICIPALITY_CONTACT' => '',
     'MUNICIPAL_BANK_ACCOUNT' => '',

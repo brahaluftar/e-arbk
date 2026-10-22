@@ -45,9 +45,24 @@ The migration is additive and does not add foreign keys to legacy master tables.
 
 ## Roles
 
-- `ADMIN`: all Phase 2 screens and classification changes.
-- `OFFICIAL`: listing, details, and manual classification.
-- `READ_ONLY`: listing and details only.
+- `ADMIN`: everything, including finance (invoices, payments, payment reports, annual invoicing), imports, users and email reports.
+- `OFFICIAL`: register, business editing, units, classification, work permits, business portal access and appeals.
+- `READ_ONLY`: register, details and exports.
+- `BUSINESS`: the business portal only (own businesses, invoices, permits, appeals).
+
+## Finance
+
+See [the release notes](docs/release-notes-2026-10.md) and [the Low Level Design](docs/LLD-e-arbk.md). In short: annual jobs invoice every billable business and unit
+(`BILLING_TARIFF_SOURCES`), invoices carry a UNIREF and are rendered on demand in Albanian, English or Serbian with previous debt and
+total obligations, payments are entered manually or imported from the Finance Directorate's daily report, wrong payments are reversed
+(storno) and every invoice change requires a comment that appears in the invoice history. Work permits are issued only to active businesses without debt.
+
+## Tests
+
+```bash
+composer test        # PHPUnit
+composer ui-check    # renders every screen with sample data and checks 360/768/1280 px layouts (needs Node + Playwright)
+```
 
 No initial password is stored in source. Use the CLI command to create accounts.
 

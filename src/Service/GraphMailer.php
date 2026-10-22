@@ -7,77 +7,55 @@ use App\Support\Config;
 use Closure;
 use RuntimeException;
 
+/** Sends HTML email through Microsoft Graph with an app-only (client credentials) token. */
 final class GraphMailer
 {
+    private ?string $accessToken = null;
+    private int $tokenExpiresAt = 0;
+
     /** @param Closure(string,string,array<string,string>,string,int):array{int,string}|null $transport */
     public function __construct(private Config $config, private ?Closure $transport = null) {}
 
     public function sendPasswordReset(string $email, string $name, string $resetUrl): void
     {
-        $tenant = $this->config->string('GRAPH_TENANT_ID');
-        $client = $this->config->string('GRAPH_CLIENT_ID');
-        $secret = $this->config->string('GRAPH_CLIENT_SECRET');
-        $sender = $this->config->string('GRAPH_SENDER_MAILBOX');
-        $baseUrl = rtrim($this->config->string('GRAPH_BASE_URL'), '/');
-        $timeout = max(1, min(60, $this->config->int('GRAPH_TIMEOUT_SECONDS')));
-        if ($tenant === '' || $client === '' || $secret === '' || filter_var($sender, FILTER_VALIDATE_EMAIL) === false) {
-            throw new RuntimeException('Microsoft Graph mail configuration is incomplete.');
-        }
-        $graphHost = strtolower((string) parse_url($baseUrl, PHP_URL_HOST));
-        if (parse_url($baseUrl, PHP_URL_SCHEME) !== 'https' || $graphHost !== 'graph.microsoft.com' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('Microsoft Graph mail configuration or recipient is invalid.');
-        }
-
-        [$status, $body] = $this->request(
-            'POST',
-            'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token',
-            ['Content-Type' => 'application/x-www-form-urlencoded'],
-            http_build_query([
-                'client_id' => $client,
-                'client_secret' => $secret,
-                'scope' => 'https://graph.microsoft.com/.default',
-                'grant_type' => 'client_credentials',
-            ]),
-            $timeout
-        );
-        if ($status < 200 || $status >= 300) throw new RuntimeException('Microsoft identity token request failed (HTTP ' . $status . ').');
-        $tokenData = json_decode($body, true);
-        $accessToken = is_array($tokenData) && is_string($tokenData['access_token'] ?? null) ? $tokenData['access_token'] : '';
-        if ($accessToken === '') throw new RuntimeException('Microsoft identity response did not contain an access token.');
-
         $greeting = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeUrl = htmlspecialchars($resetUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $message = [
-            'message' => [
-                'subject' => 'Rivendosja e fjalëkalimit - Tarifat e bizneseve',
-                'body' => [
-                    'contentType' => 'HTML',
-                    'content' => '<p>Përshëndetje ' . $greeting . ',</p><p>Kërkuat të rivendosni fjalëkalimin. Përdorni lidhjen më poshtë brenda afatit të vlefshmërisë:</p><p><a href="' . $safeUrl . '">Rivendos fjalëkalimin</a></p><p>Nëse nuk e keni kërkuar këtë, mund ta shpërfillni këtë mesazh.</p>',
-                ],
-                'toRecipients' => [['emailAddress' => ['address' => $email]]],
-            ],
-            'saveToSentItems' => false,
-        ];
-        [$status] = $this->request(
-            'POST',
-            $baseUrl . '/users/' . rawurlencode($sender) . '/sendMail',
-            ['Authorization' => 'Bearer ' . $accessToken, 'Content-Type' => 'application/json'],
-            json_encode($message, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            $timeout
-        );
-        if ($status < 200 || $status >= 300) throw new RuntimeException('Microsoft Graph sendMail failed (HTTP ' . $status . ').');
+        $this->sendHtml($email, 'Rivendosja e fjalëkalimit - Tarifat e bizneseve',
+            '<p>Përshëndetje ' . $greeting . ',</p><p>Kërkuat të rivendosni fjalëkalimin. Përdorni lidhjen më poshtë brenda afatit të vlefshmërisë:</p><p><a href="' . $safeUrl . '">Rivendos fjalëkalimin</a></p><p>Nëse nuk e keni kërkuar këtë, mund ta shpërfillni këtë mesazh.</p>');
     }
 
     public function sendHtml(string $email, string $subject, string $html): void
     {
-        $tenant=$this->config->string('GRAPH_TENANT_ID');$client=$this->config->string('GRAPH_CLIENT_ID');$secret=$this->config->string('GRAPH_CLIENT_SECRET');$sender=$this->config->string('GRAPH_SENDER_MAILBOX');$baseUrl=rtrim($this->config->string('GRAPH_BASE_URL'),'/');$timeout=max(1,min(60,$this->config->int('GRAPH_TIMEOUT_SECONDS')));
-        if($tenant===''||$client===''||$secret===''||filter_var($sender,FILTER_VALIDATE_EMAIL)===false||filter_var($email,FILTER_VALIDATE_EMAIL)===false)throw new RuntimeException('Microsoft Graph mail configuration or recipient is invalid.');
-        if(parse_url($baseUrl,PHP_URL_SCHEME)!=='https'||strtolower((string)parse_url($baseUrl,PHP_URL_HOST))!=='graph.microsoft.com')throw new RuntimeException('Microsoft Graph mail configuration is invalid.');
-        [$status,$body]=$this->request('POST','https://login.microsoftonline.com/'.rawurlencode($tenant).'/oauth2/v2.0/token',['Content-Type'=>'application/x-www-form-urlencoded'],http_build_query(['client_id'=>$client,'client_secret'=>$secret,'scope'=>'https://graph.microsoft.com/.default','grant_type'=>'client_credentials']),$timeout);
-        $data=json_decode($body,true);$token=is_array($data)&&is_string($data['access_token']??null)?$data['access_token']:'';if($status<200||$status>=300||$token==='')throw new RuntimeException('Microsoft identity token request failed.');
-        $payload=['message'=>['subject'=>$subject,'body'=>['contentType'=>'HTML','content'=>$html],'toRecipients'=>[['emailAddress'=>['address'=>$email]]]],'saveToSentItems'=>false];
-        [$status]=$this->request('POST',$baseUrl.'/users/'.rawurlencode($sender).'/sendMail',['Authorization'=>'Bearer '.$token,'Content-Type'=>'application/json'],json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$timeout);if($status<200||$status>=300)throw new RuntimeException('Microsoft Graph sendMail failed (HTTP '.$status.').');
+        $sender = $this->config->string('GRAPH_SENDER_MAILBOX');
+        $baseUrl = rtrim($this->config->string('GRAPH_BASE_URL'), '/');
+        if (filter_var($sender, FILTER_VALIDATE_EMAIL) === false || filter_var($email, FILTER_VALIDATE_EMAIL) === false) throw new RuntimeException('Microsoft Graph mail configuration or recipient is invalid.');
+        if (parse_url($baseUrl, PHP_URL_SCHEME) !== 'https' || strtolower((string) parse_url($baseUrl, PHP_URL_HOST)) !== 'graph.microsoft.com') throw new RuntimeException('Microsoft Graph mail configuration is invalid.');
+        $token = $this->token();
+        $payload = ['message' => ['subject' => $subject, 'body' => ['contentType' => 'HTML', 'content' => $html], 'toRecipients' => [['emailAddress' => ['address' => $email]]]], 'saveToSentItems' => false];
+        [$status] = $this->request('POST', $baseUrl . '/users/' . rawurlencode($sender) . '/sendMail', ['Authorization' => 'Bearer ' . $token, 'Content-Type' => 'application/json'], json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), $this->timeout());
+        if ($status < 200 || $status >= 300) throw new RuntimeException('Microsoft Graph sendMail failed (HTTP ' . $status . ').');
     }
+
+    /** Client-credentials token, reused for the rest of the request (bulk invitations send many emails). */
+    private function token(): string
+    {
+        if ($this->accessToken !== null && time() < $this->tokenExpiresAt) return $this->accessToken;
+        $tenant = $this->config->string('GRAPH_TENANT_ID');
+        $client = $this->config->string('GRAPH_CLIENT_ID');
+        $secret = $this->config->string('GRAPH_CLIENT_SECRET');
+        if ($tenant === '' || $client === '' || $secret === '') throw new RuntimeException('Microsoft Graph mail configuration is incomplete.');
+        [$status, $body] = $this->request('POST', 'https://login.microsoftonline.com/' . rawurlencode($tenant) . '/oauth2/v2.0/token', ['Content-Type' => 'application/x-www-form-urlencoded'],
+            http_build_query(['client_id' => $client, 'client_secret' => $secret, 'scope' => 'https://graph.microsoft.com/.default', 'grant_type' => 'client_credentials']), $this->timeout());
+        if ($status < 200 || $status >= 300) throw new RuntimeException('Microsoft identity token request failed (HTTP ' . $status . ').');
+        $data = json_decode($body, true);
+        $token = is_array($data) && is_string($data['access_token'] ?? null) ? $data['access_token'] : '';
+        if ($token === '') throw new RuntimeException('Microsoft identity response did not contain an access token.');
+        $this->accessToken = $token;
+        $this->tokenExpiresAt = time() + max(60, (int) (is_array($data) ? ($data['expires_in'] ?? 300) : 300)) - 60;
+        return $token;
+    }
+
+    private function timeout(): int { return max(1, min(60, $this->config->int('GRAPH_TIMEOUT_SECONDS'))); }
 
     /** @param array<string,string> $headers @return array{int,string} */
     private function request(string $method, string $url, array $headers, string $body, int $timeout): array

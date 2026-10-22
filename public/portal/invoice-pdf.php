@@ -1,4 +1,12 @@
 <?php
 declare(strict_types=1);
-$app=require dirname(__DIR__,2).'/bootstrap.php';$user=$app['auth']->requireUser();$id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);$municipal=in_array($user['role_code'],['ADMIN','OFFICIAL','READ_ONLY'],true);$businessAccess=$user['role_code']==='BUSINESS'&&$id&&(new App\Repository\PortalRepository($app['pdo']))->userCanAccessInvoice($user['id'],(int)$id);if(!$id||(!$municipal&&!$businessAccess)){http_response_code(403);exit('Access denied.');}
-$store=new App\Document\DocumentStore(dirname(__DIR__,2).'/var/documents');$key=(new App\Billing\InvoiceDocumentService($app['pdo'],$app['config'],$store))->ensure($id);$path=$store->path($key);header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="fatura-'.$id.'.pdf"');header('Content-Length: '.filesize($path));header('Cache-Control: private, no-store');readfile($path);
+// Invoice PDF for staff and for business users linked to the invoice's business.
+$app=require dirname(__DIR__,2).'/bootstrap.php';$user=$app['auth']->requireUser();
+$id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);
+$municipal=App\Security\Auth::isStaff($user);
+$businessAccess=$user['role_code']==='BUSINESS'&&$id&&(new App\Repository\PortalRepository($app['pdo']))->userCanAccessInvoice($user['id'],(int)$id);
+if(!$id||(!$municipal&&!$businessAccess)){http_response_code(403);exit('Access denied.');}
+$language=App\Billing\InvoiceTranslations::normalize($_GET['lang']??'sq');
+try{$pdf=(new App\Billing\InvoiceDocumentService($app['pdo'],$app['config']))->render((int)$id,$language);}
+catch(DomainException $e){http_response_code(404);header('Content-Type: text/plain; charset=UTF-8');exit($e->getMessage());}
+send_download($pdf,'fatura-'.$id.'-'.$language.'.pdf','application/pdf');

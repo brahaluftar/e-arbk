@@ -78,4 +78,25 @@ final class UserManagementServiceTest extends TestCase
         $this->expectExceptionMessage('Llogaria është ndryshuar ndërkohë');
         $service->save(array_replace($this->input(),['id'=>'1','role_code'=>'ADMIN','version'=>'0x0000000000000000']),1);
     }
+
+    public function testPasswordOrRoleChangeEndsTheUsersSessions(): void
+    {
+        $official=['id'=>2,'email'=>'zyrtar@example.test','normalized_email'=>'ZYRTAR@EXAMPLE.TEST','full_name'=>'Zyrtar','role_code'=>'OFFICIAL','is_active'=>1,'version'=>'0x0000000000000002'];
+        foreach ([['password'=>'a-new-long-password','password_confirmation'=>'a-new-long-password'],['role_code'=>'READ_ONLY'],['is_active'=>'0']] as $change) {
+            $pdo=$this->createMock(PDO::class);
+            $accounts=$this->createMock(PDOStatement::class);
+            $accounts->method('fetchAll')->willReturn([$this->admin(),$official]);
+            $pdo->method('beginTransaction')->willReturn(true);
+            $pdo->method('query')->willReturn($accounts);
+            $pdo->method('commit')->willReturn(true);
+            $updates=[];
+            $statement=$this->createMock(PDOStatement::class);
+            $statement->method('execute')->willReturn(true);
+            $pdo->method('prepare')->willReturnCallback(static function(string $sql)use(&$updates,$statement){$updates[]=$sql;return $statement;});
+            $this->service($pdo)->save(array_replace(['id'=>'2','full_name'=>'Zyrtar','email'=>'zyrtar@example.test','role_code'=>'OFFICIAL','is_active'=>'1','version'=>'0x0000000000000002','password'=>'','password_confirmation'=>''],$change),1);
+            $userUpdate=array_values(array_filter($updates,static fn(string $sql): bool => str_starts_with($sql,'UPDATE dbo.app_users')));
+            self::assertCount(1,$userUpdate);
+            self::assertStringContainsString('auth_version=auth_version+1',$userUpdate[0]);
+        }
+    }
 }

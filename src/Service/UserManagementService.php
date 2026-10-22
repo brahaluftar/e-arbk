@@ -63,14 +63,15 @@ final class UserManagementService
             } else {
                 $passwordSql = $passwordHash === null ? '' : ',password_hash=:password';
                 if ($passwordHash !== null) $values['password'] = $passwordHash;
-                $statement = $this->pdo->prepare('UPDATE dbo.app_users SET email=:email,normalized_email=:normalized,full_name=:name,role_code=:role,is_active=:active'.$passwordSql.' WHERE id=:id');
+                // A new password, another role or a deactivation ends the account's open sessions.
+                $revokeSessions = $passwordHash !== null || $previous['role_code'] !== $role || ((int)$previous['is_active'] === 1 && $active === '0');
+                $versionSql = $revokeSessions ? ',auth_version=auth_version+1' : '';
+                $statement = $this->pdo->prepare('UPDATE dbo.app_users SET email=:email,normalized_email=:normalized,full_name=:name,role_code=:role,is_active=:active'.$passwordSql.$versionSql.' WHERE id=:id');
                 $statement->execute($values + ['id'=>$id]);
             }
             if ($passwordHash !== null) {
-                $key = $this->config->string('APP_KEY') ?: 'development-only-rate-limit-key';
-                foreach (array_unique([$normalizedEmail, (string)($previous['normalized_email'] ?? $normalizedEmail)]) as $address) {
-                    $this->pdo->prepare("DELETE dbo.login_rate_limits WHERE action_code='login_email' AND dimension_hash=CONVERT(binary(32),:hash,2)")->execute(['hash'=>hash_hmac('sha256',$address,$key)]);
-                }
+                $limiter = new \App\Security\LoginRateLimiter($this->pdo, $this->config);
+                foreach (array_unique([$normalizedEmail, (string)($previous['normalized_email'] ?? $normalizedEmail)]) as $address) $limiter->clearEmail($address);
             }
             $publicFields = array_flip(['email','full_name','role_code','is_active']);
             $this->audit->record($actorId, $previous === null ? 'USER_CREATED' : 'USER_UPDATED', 'APP_USER', (string)$id,

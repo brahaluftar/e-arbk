@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $app = require dirname(__DIR__, 2) . '/bootstrap.php';
-if ($app['auth']->user() !== null) redirect('/admin/dashboard.php');
+if ($app['auth']->user() !== null) redirect(App\Security\Auth::landingPath($app['auth']->user()));
 $delivery = null;
 $service = new App\Security\PasswordResetService($app['pdo'], $app['config'], new App\Service\GraphMailer($app['config']), new App\Service\AuditLogger($app['pdo']));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

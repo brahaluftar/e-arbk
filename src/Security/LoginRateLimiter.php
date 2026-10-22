@@ -4,9 +4,13 @@ namespace App\Security;
 use App\Support\Config;
 use PDO;
 
+/**
+ * Database-backed attempt limiting by IP and by email, keyed with an HMAC of APP_KEY.
+ * The prefix separates uses: "login" (failed logins) and "reset" (password reset requests).
+ */
 final class LoginRateLimiter
 {
-    public function __construct(private PDO $pdo,private Config $config) {}
+    public function __construct(private PDO $pdo,private Config $config,private string $prefix='login') {}
 
     public function allowed(string $email,string $ip): bool
     {
@@ -14,6 +18,7 @@ final class LoginRateLimiter
             $statement=$this->pdo->prepare('SELECT blocked_until FROM dbo.login_rate_limits WHERE action_code=:action AND dimension_hash=CONVERT(binary(32),:hash,2)');
             $statement->execute(['action'=>$action,'hash'=>$hash]);
             $blocked=$statement->fetchColumn();
+            $statement->closeCursor();
             if(is_string($blocked) && strtotime($blocked.' UTC')>time()) return false;
         }
         return true;
@@ -24,12 +29,28 @@ final class LoginRateLimiter
         foreach($this->dimensions($email,$ip) as [$action,$hash]) $this->recordFailure($action,$hash);
     }
 
+    /** Checks and counts one attempt (used where every request counts, such as reset requests). */
+    public function attempt(string $email,string $ip): bool
+    {
+        if(!$this->allowed($email,$ip)) return false;
+        $this->failed($email,$ip);
+        return true;
+    }
+
     public function succeeded(string $email,string $ip): void
     {
-        foreach($this->dimensions($email,$ip) as [$action,$hash]) {
-            $statement=$this->pdo->prepare('DELETE dbo.login_rate_limits WHERE action_code=:action AND dimension_hash=CONVERT(binary(32),:hash,2)');
-            $statement->execute(['action'=>$action,'hash'=>$hash]);
-        }
+        foreach($this->dimensions($email,$ip) as [$action,$hash]) $this->clear($action,$hash);
+    }
+
+    /** Lifts the email block, e.g. after an administrator or the user sets a new password. */
+    public function clearEmail(string $email): void
+    {
+        $this->clear($this->prefix.'_email',$this->hash(mb_strtoupper(trim($email),'UTF-8')));
+    }
+
+    private function clear(string $action,string $hash): void
+    {
+        $this->pdo->prepare('DELETE dbo.login_rate_limits WHERE action_code=:action AND dimension_hash=CONVERT(binary(32),:hash,2)')->execute(['action'=>$action,'hash'=>$hash]);
     }
 
     private function recordFailure(string $action,string $hash): void
@@ -42,7 +63,12 @@ final class LoginRateLimiter
     /** @return list<array{string,string}> */
     private function dimensions(string $email,string $ip): array
     {
+        return [[$this->prefix.'_ip',$this->hash($ip)],[$this->prefix.'_email',$this->hash(mb_strtoupper(trim($email),'UTF-8'))]];
+    }
+
+    private function hash(string $value): string
+    {
         $key=$this->config->string('APP_KEY');if($key==='') $key='development-only-rate-limit-key';
-        return [['login_ip',hash_hmac('sha256',$ip,$key)],['login_email',hash_hmac('sha256',mb_strtoupper(trim($email),'UTF-8'),$key)]];
+        return hash_hmac('sha256',$value,$key);
     }
 }

@@ -13,10 +13,10 @@ final class XlsxRowReader
     public function rows(string $path): Generator
     {
         $zip=new ZipArchive();if($zip->open($path)!==true) throw new RuntimeException('Invalid XLSX archive.');
-        try {if($zip->locateName('xl/worksheets/sheet1.xml')===false) throw new RuntimeException('XLSX sheet1.xml is missing.');}
+        try {$sheet=$this->firstSheet($zip);if($zip->locateName($sheet)===false) throw new RuntimeException('XLSX worksheet is missing.');}
         finally{$zip->close();}
         $shared=$this->sharedStrings($path);$reader=new XMLReader();
-        if(!$reader->open($this->uri($path,'xl/worksheets/sheet1.xml'),null,LIBXML_NONET|LIBXML_COMPACT)) throw new RuntimeException('Cannot read XLSX worksheet.');
+        if(!$reader->open($this->uri($path,$sheet),null,LIBXML_NONET|LIBXML_COMPACT)) throw new RuntimeException('Cannot read XLSX worksheet.');
         try {
             while($reader->read()) {
                 if($reader->nodeType!==XMLReader::ELEMENT||$reader->localName!=='row') continue;
@@ -30,6 +30,26 @@ final class XlsxRowReader
                 else {$max=max(array_keys($values));$dense=[];for($i=0;$i<=$max;$i++)$dense[]=$values[$i]??null;yield $dense;}
             }
         } finally {$reader->close();}
+    }
+
+    /** Path of the first sheet in workbook order (not necessarily sheet1.xml). */
+    private function firstSheet(ZipArchive $zip): string
+    {
+        $fallback='xl/worksheets/sheet1.xml';
+        $workbook=$zip->getFromName('xl/workbook.xml');$relations=$zip->getFromName('xl/_rels/workbook.xml.rels');
+        if(!is_string($workbook)||!is_string($relations))return $fallback;
+        $book=simplexml_load_string($workbook,'SimpleXMLElement',LIBXML_NONET);$rels=simplexml_load_string($relations,'SimpleXMLElement',LIBXML_NONET);
+        if($book===false||$rels===false)return $fallback;
+        $sheet=($book->xpath('//*[local-name()="sheets"]/*[local-name()="sheet"]')?:[])[0]??null;
+        if($sheet===null)return $fallback;
+        $id=(string)($sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id']??'');
+        foreach($rels->xpath('//*[local-name()="Relationship"]')?:[] as $rel){
+            if((string)$rel['Id']!==$id)continue;
+            $target=(string)$rel['Target'];
+            $target=str_starts_with($target,'/')?ltrim($target,'/'):'xl/'.$target;
+            return preg_match('~\Axl/worksheets/[A-Za-z0-9_.-]+\.xml\z~',$target)===1?$target:$fallback;
+        }
+        return $fallback;
     }
 
     /** @return list<string> */

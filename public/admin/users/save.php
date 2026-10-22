@@ -3,9 +3,7 @@ declare(strict_types=1);
 
 $app = require dirname(__DIR__,3).'/bootstrap.php';
 $user = $app['auth']->requireRole(['ADMIN']);
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$app['csrf']->verify(is_string($_POST['_csrf'] ?? null) ? $_POST['_csrf'] : null)) {
-    http_response_code(400); exit('Invalid request.');
-}
+require_post();
 $id = filter_var($_POST['id'] ?? '0', FILTER_VALIDATE_INT);
 if ($id === false || $id < 0) { http_response_code(400); exit('Invalid user ID.'); }
 try {

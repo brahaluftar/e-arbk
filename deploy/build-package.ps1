@@ -12,7 +12,7 @@ if ($Version.Contains('..') -or (Test-Path -LiteralPath $bundlePath) -or (Test-P
 if ($LASTEXITCODE -ne 0) { throw 'Snapshot validation failed.' }
 $appPath = Join-Path $bundlePath 'app'
 New-Item -ItemType Directory -Path $appPath -Force | Out-Null
-foreach ($directory in @('bin','config','database','public','src','templates')) {
+foreach ($directory in @('bin','config','database','public','resources','src','templates')) {
     Copy-Item -LiteralPath (Join-Path $rootPath $directory) -Destination $appPath -Recurse
 }
 # Environment files are machine-specific secrets and must never enter a release.

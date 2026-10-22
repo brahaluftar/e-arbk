@@ -13,17 +13,37 @@ final class BusinessImportService
     private const FIELDS=['business_number','legal_name','trade_name','business_type','nace_raw','nace_code','nace_description','sector_raw','sector_clean','employee_count','business_size','total_m','total_f','city','business_status','business_year','business_month','closed_date','passive','passive_date','manager_name','phone_number','unit_name','unit_address','unit_email','unit_manager','unit_nace_code','unit_nace_description','unit_annual_tariff','unit_auto_invoice','validation_error'];
     public function __construct(private PDO $pdo,private AuditLogger $audit,private XlsxRowReader $reader=new XlsxRowReader(),private BusinessImportNormalizer $normalizer=new BusinessImportNormalizer()){}
 
+    /** Hours after which a run still marked PROCESSING is treated as interrupted and queued again. */
+    public const STALE_HOURS=6;
+
     public function processNext(): bool
     {
+        $this->pdo->exec("UPDATE dbo.business_import_runs SET status='QUEUED',error_message=N'Rikthyer në radhë pas një përpunimi të ndërprerë.' WHERE status='PROCESSING' AND started_at<DATEADD(hour,-".self::STALE_HOURS.",SYSUTCDATETIME())");
         $claim=$this->pdo->query("UPDATE target WITH(UPDLOCK,READPAST,ROWLOCK) SET status='PROCESSING',started_at=SYSUTCDATETIME(),error_message=NULL OUTPUT inserted.* FROM (SELECT TOP(1)* FROM dbo.business_import_runs WHERE status='QUEUED' ORDER BY created_at,id) target")->fetch();
         if(!is_array($claim))return false;$runId=(int)$claim['id'];
         try{$this->process($claim);return true;}catch(Throwable $e){$message=mb_substr($e->getMessage(),0,1900);$this->pdo->prepare("UPDATE dbo.business_import_runs SET status='FAILED',error_message=:error,completed_at=SYSUTCDATETIME() WHERE id=:id")->execute(['error'=>$message,'id'=>$runId]);$this->audit->record(null,'BUSINESS_IMPORT_FAILED','IMPORT_RUN',(string)$runId,null,['error'=>$message]);throw $e;}
     }
 
+    /** Queues a failed run again; the stored workbook is reused. */
+    public function retry(int $runId,int $actorId): void
+    {
+        $statement=$this->pdo->prepare('SELECT storage_path FROM dbo.business_import_runs WHERE id=:id');$statement->execute(['id'=>$runId]);$path=$statement->fetchColumn();$statement->closeCursor();
+        if($path===false)throw new \DomainException('Importi nuk u gjet.');
+        if(!is_file($this->absolutePath((string)$path)))throw new \DomainException('Skedari i importit nuk ekziston më. Ngarkojeni përsëri.');
+        $update=$this->pdo->prepare("UPDATE dbo.business_import_runs SET status='QUEUED',error_message=NULL,started_at=NULL,completed_at=NULL WHERE id=:id AND status='FAILED'");$update->execute(['id'=>$runId]);
+        if($update->rowCount()!==1)throw new \DomainException('Vetëm importet e dështuara mund të riprovohen.');
+        $this->audit->record($actorId,'BUSINESS_IMPORT_RETRIED','IMPORT_RUN',(string)$runId,['status'=>'FAILED'],['status'=>'QUEUED']);
+    }
+
+    private function absolutePath(string $path): string
+    {
+        return preg_match('/^(?:[A-Za-z]:[\\\/]|\/)/',$path)===1?$path:dirname(__DIR__,2).DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$path);
+    }
+
     /** @param array<string,mixed> $run */
     private function process(array $run): void
     {
-        $path=(string)$run['storage_path'];if(!preg_match('/^(?:[A-Za-z]:[\\\\\/]|\/)/',$path))$path=dirname(__DIR__,2).DIRECTORY_SEPARATOR.str_replace('/',DIRECTORY_SEPARATOR,$path);if(!is_file($path))throw new RuntimeException('Import file is missing.');$runId=(int)$run['id'];$sourceType=(string)$run['source_type'];
+        $path=$this->absolutePath((string)$run['storage_path']);if(!is_file($path))throw new RuntimeException('Import file is missing.');$runId=(int)$run['id'];$sourceType=(string)$run['source_type'];
         $this->pdo->prepare('DELETE dbo.business_import_staging WHERE import_run_id=:id')->execute(['id'=>$runId]);
         $headers=[];$rowNumber=0;$batch=[];
         foreach($this->reader->rows($path) as $row){$rowNumber++;if($rowNumber===1){foreach($row as $index=>$header)$headers[trim((string)$header)]=$index;$this->validateHeaders($headers,$sourceType);continue;}$normalized=$this->normalizer->normalize($row,$headers,$sourceType);if(array_filter($normalized,static fn($v)=>$v!==null&&$v!=='')===[]||(!in_array($sourceType,['CONTACTS','UNITS'],true)&&($normalized['city']??null)!==self::IMPORT_CITY))continue;$batch[]=['source_row_number'=>$rowNumber,'data'=>$normalized];if(count($batch)>=2000){$this->insertBatch($runId,$batch);$batch=[];}}
@@ -59,7 +79,7 @@ SQL;
     {
         if($sourceType==='UNITS'){$this->mergeUnits($runId,$totalRows);return;}
         if($sourceType==='CONTACTS'){$this->mergeContacts($runId,$totalRows);return;}
-        $women=$sourceType==='WOMEN'?1:0;
+        $women=$sourceType==='WOMEN'?1:0;$closed=$sourceType==='CLOSED'?1:0;
         $sql=<<<SQL
 SET NOCOUNT ON;SET XACT_ABORT ON;
 DECLARE @actions TABLE(action_name varchar(10));
@@ -74,13 +94,13 @@ WHEN MATCHED THEN UPDATE SET
  target.NaceRowGuid=CASE WHEN ISNULL(target.NACE_CODE_REG,'')<>ISNULL(source.nace_code,'') THEN NULL ELSE target.NaceRowGuid END,
  target.NACE_REG_TARIFF=CASE WHEN ISNULL(target.NACE_CODE_REG,'')<>ISNULL(source.nace_code,'') THEN NULL ELSE target.NACE_REG_TARIFF END,
  target.tarifa_me_lirim=CASE WHEN ISNULL(target.NACE_CODE_REG,'')<>ISNULL(source.nace_code,'') THEN NULL ELSE target.tarifa_me_lirim END,
- target.Emri=COALESCE(source.legal_name,target.Emri),target.EMRI_TREGTAR=source.trade_name,target.Lloji=COALESCE(source.business_type,target.Lloji),
- target.NACE_CODE_REG=COALESCE(source.nace_code,target.NACE_CODE_REG),target.NACEPERSHKRIMI=COALESCE(source.nace_description,target.NACEPERSHKRIMI),target.SEKTORI=source.sector_clean,
- target.NR_PUNETOREVE=source.employee_count,target.MADHESIA=source.business_size,target.TOTAL_M=source.total_m,target.TOTAL_F=source.total_f,
- target.Qyteti=COALESCE(source.city,target.Qyteti),target.Statusi=COALESCE(source.business_status,target.Statusi),target.Pasiv=COALESCE(source.passive,target.Pasiv),target.date_pasivizimit=CASE WHEN source.passive=0 THEN NULL ELSE COALESCE(source.passive_date,target.date_pasivizimit) END,target.ATK_MBYLLUR=CASE WHEN source.passive=1 THEN 1 ELSE target.ATK_MBYLLUR END,target.Viti=source.business_year,target.MUAJI=source.business_month,
+ target.Emri=COALESCE(source.legal_name,target.Emri),target.EMRI_TREGTAR=COALESCE(source.trade_name,target.EMRI_TREGTAR),target.Lloji=COALESCE(source.business_type,target.Lloji),
+ target.NACE_CODE_REG=COALESCE(source.nace_code,target.NACE_CODE_REG),target.NACEPERSHKRIMI=COALESCE(source.nace_description,target.NACEPERSHKRIMI),target.SEKTORI=COALESCE(source.sector_clean,target.SEKTORI),
+ target.NR_PUNETOREVE=COALESCE(source.employee_count,target.NR_PUNETOREVE),target.MADHESIA=COALESCE(source.business_size,target.MADHESIA),target.TOTAL_M=COALESCE(source.total_m,target.TOTAL_M),target.TOTAL_F=COALESCE(source.total_f,target.TOTAL_F),
+ target.Qyteti=COALESCE(source.city,target.Qyteti),target.Statusi=COALESCE(source.business_status,target.Statusi),target.Pasiv=COALESCE(source.passive,target.Pasiv),target.date_pasivizimit=CASE WHEN source.passive=0 THEN NULL ELSE COALESCE(source.passive_date,target.date_pasivizimit) END,target.ATK_MBYLLUR=CASE WHEN source.passive=1 OR $closed=1 OR source.closed_date IS NOT NULL THEN 1 ELSE target.ATK_MBYLLUR END,target.Viti=COALESCE(source.business_year,target.Viti),target.MUAJI=COALESCE(source.business_month,target.MUAJI),
  target.DATA_SHUARJES=COALESCE(source.closed_date,target.DATA_SHUARJES),target.pronare_grua=CASE WHEN $women=1 THEN 1 ELSE target.pronare_grua END,target.import_updated_at=SYSUTCDATETIME()
 WHEN NOT MATCHED THEN INSERT(ARBKrowGUID,NRBIZ,Emri,EMRI_TREGTAR,Lloji,NACE_CODE_REG,NACEPERSHKRIMI,SEKTORI,NR_PUNETOREVE,MADHESIA,TOTAL_M,TOTAL_F,Qyteti,Statusi,Viti,MUAJI,DATA_SHUARJES,pronare_grua,Pasiv,date_pasivizimit,ATK_MBYLLUR,import_updated_at)
- VALUES(NEWID(),source.business_number,source.legal_name,source.trade_name,source.business_type,source.nace_code,source.nace_description,source.sector_clean,source.employee_count,source.business_size,source.total_m,source.total_f,source.city,source.business_status,source.business_year,source.business_month,source.closed_date,CASE WHEN $women=1 THEN 1 ELSE NULL END,source.passive,source.passive_date,CASE WHEN source.passive=1 THEN 1 ELSE 0 END,SYSUTCDATETIME())
+ VALUES(NEWID(),source.business_number,source.legal_name,source.trade_name,source.business_type,source.nace_code,source.nace_description,source.sector_clean,source.employee_count,source.business_size,source.total_m,source.total_f,source.city,source.business_status,source.business_year,source.business_month,source.closed_date,CASE WHEN $women=1 THEN 1 ELSE NULL END,source.passive,source.passive_date,CASE WHEN source.passive=1 OR $closed=1 OR source.closed_date IS NOT NULL THEN 1 ELSE 0 END,SYSUTCDATETIME())
 OUTPUT \$action INTO @actions;
 UPDATE x SET ended_at=SYSUTCDATETIME(),end_reason=N'Registered NACE code changed by Excel import'
 FROM dbo.business_nace_assignments x JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=x.business_id JOIN dbo.business_import_staging s ON s.import_run_id=:run_id2 AND s.business_number=a.NRBIZ
@@ -98,30 +118,32 @@ SQL;
         $sql=<<<'SQL'
 SET NOCOUNT ON;SET XACT_ABORT ON;
 DECLARE @actions TABLE(action_name varchar(10));
+UPDATE s SET validation_error=N'NRB nuk ekziston në regjistrin e bizneseve.' FROM dbo.business_import_staging s WHERE s.import_run_id=:unknown_run AND s.validation_error IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.ARBK_LIST a WHERE a.NRBIZ=s.business_number);
 WITH ranked AS(SELECT s.*,ROW_NUMBER() OVER(PARTITION BY business_number,unit_name,unit_address ORDER BY source_row_number DESC) rn FROM dbo.business_import_staging s WHERE import_run_id=:run_id), source_rows AS(SELECT a.REGULATION_ID business_id,s.*,r.uploaded_by_user_id FROM ranked s JOIN dbo.ARBK_LIST a ON a.NRBIZ=s.business_number JOIN dbo.business_import_runs r ON r.id=s.import_run_id WHERE s.rn=1 AND s.validation_error IS NULL)
 MERGE dbo.business_units WITH(HOLDLOCK) target USING source_rows source ON target.business_id=source.business_id AND target.unit_name=source.unit_name AND target.address=source.unit_address
-WHEN MATCHED THEN UPDATE SET phone_number=source.phone_number,email=source.unit_email,manager_name=source.unit_manager,nace_code=source.unit_nace_code,nace_description=source.unit_nace_description,annual_tariff=source.unit_annual_tariff,auto_invoice=COALESCE(source.unit_auto_invoice,0),is_active=1,updated_at=SYSUTCDATETIME()
+WHEN MATCHED THEN UPDATE SET phone_number=COALESCE(source.phone_number,target.phone_number),email=COALESCE(source.unit_email,target.email),manager_name=COALESCE(source.unit_manager,target.manager_name),nace_code=source.unit_nace_code,nace_description=COALESCE(source.unit_nace_description,target.nace_description),annual_tariff=COALESCE(source.unit_annual_tariff,target.annual_tariff),auto_invoice=COALESCE(source.unit_auto_invoice,0),is_active=1,updated_at=SYSUTCDATETIME()
 WHEN NOT MATCHED THEN INSERT(business_id,unit_name,address,phone_number,email,manager_name,nace_code,nace_description,annual_tariff,auto_invoice,created_by_user_id) VALUES(source.business_id,source.unit_name,source.unit_address,source.phone_number,source.unit_email,source.unit_manager,source.unit_nace_code,source.unit_nace_description,source.unit_annual_tariff,COALESCE(source.unit_auto_invoice,0),source.uploaded_by_user_id)
 OUTPUT $action INTO @actions;
 DECLARE @valid int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id2 AND validation_error IS NULL);DECLARE @errors int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id3 AND validation_error IS NOT NULL);DECLARE @inserted int=(SELECT COUNT(*) FROM @actions WHERE action_name='INSERT');DECLARE @updated int=(SELECT COUNT(*) FROM @actions WHERE action_name='UPDATE');
 UPDATE dbo.business_import_runs SET status='COMPLETED',total_rows=:total,valid_rows=@valid,inserted_rows=@inserted,updated_rows=@updated,error_rows=@errors,skipped_rows=:total2-@inserted-@updated,completed_at=SYSUTCDATETIME() WHERE id=:run_id4;
 SELECT @inserted inserted,@updated updated;
 SQL;
-        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$counts=$q->fetch()?:[];$this->audit->record(null,'BUSINESS_UNIT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'inserted'=>(int)($counts['inserted']??0),'updated'=>(int)($counts['updated']??0)]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
+        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['unknown_run'=>$runId,'run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$counts=$q->fetch()?:[];$this->audit->record(null,'BUSINESS_UNIT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'inserted'=>(int)($counts['inserted']??0),'updated'=>(int)($counts['updated']??0)]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
     }
 
     private function mergeContacts(int $runId,int $totalRows):void
     {
         $sql=<<<'SQL'
 SET NOCOUNT ON;SET XACT_ABORT ON;
+UPDATE s SET validation_error=N'NRB nuk ekziston në regjistrin e bizneseve.' FROM dbo.business_import_staging s WHERE s.import_run_id=:unknown_run AND s.validation_error IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.ARBK_LIST a WHERE a.NRBIZ=s.business_number);
 WITH ranked AS(SELECT s.*,ROW_NUMBER() OVER(PARTITION BY business_number ORDER BY source_row_number DESC) rn FROM dbo.business_import_staging s WHERE import_run_id=:run_id), source_rows AS(SELECT * FROM ranked WHERE rn=1 AND validation_error IS NULL AND business_number IS NOT NULL)
-UPDATE a SET a.MENAXHERI=s.manager_name,a.NUMRI_TELEFONIT=s.phone_number,a.NR_PUNETOREVE=s.employee_count,a.MADHESIA=s.business_size,a.import_updated_at=SYSUTCDATETIME() FROM dbo.ARBK_LIST a JOIN source_rows s ON s.business_number=a.NRBIZ;
+UPDATE a SET a.MENAXHERI=COALESCE(s.manager_name,a.MENAXHERI),a.NUMRI_TELEFONIT=COALESCE(s.phone_number,a.NUMRI_TELEFONIT),a.NR_PUNETOREVE=COALESCE(s.employee_count,a.NR_PUNETOREVE),a.MADHESIA=COALESCE(s.business_size,a.MADHESIA),a.import_updated_at=SYSUTCDATETIME() FROM dbo.ARBK_LIST a JOIN source_rows s ON s.business_number=a.NRBIZ;
 DECLARE @updated int=@@ROWCOUNT;
 DECLARE @valid int=(SELECT COUNT(*) FROM(SELECT business_number FROM dbo.business_import_staging WHERE import_run_id=:run_id2 AND validation_error IS NULL AND business_number IS NOT NULL GROUP BY business_number)q);
 DECLARE @errors int=(SELECT COUNT(*) FROM dbo.business_import_staging WHERE import_run_id=:run_id3 AND validation_error IS NOT NULL);
 UPDATE dbo.business_import_runs SET status='COMPLETED',total_rows=:total,valid_rows=@valid,inserted_rows=0,updated_rows=@updated,error_rows=@errors,skipped_rows=:total2-@updated,completed_at=SYSUTCDATETIME() WHERE id=:run_id4;
 SELECT @updated updated;
 SQL;
-        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$updated=(int)($q->fetch()['updated']??0);$this->audit->record(null,'BUSINESS_CONTACT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'updated'=>$updated]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
+        $this->pdo->beginTransaction();try{$q=$this->pdo->prepare($sql);$q->execute(['unknown_run'=>$runId,'run_id'=>$runId,'run_id2'=>$runId,'run_id3'=>$runId,'total'=>$totalRows,'total2'=>$totalRows,'run_id4'=>$runId]);$updated=(int)($q->fetch()['updated']??0);$this->audit->record(null,'BUSINESS_CONTACT_IMPORT_COMPLETED','IMPORT_RUN',(string)$runId,null,['total'=>$totalRows,'updated'=>$updated]);$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
     }
 }

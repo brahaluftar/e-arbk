@@ -101,9 +101,7 @@ final class PasswordResetService
             $userId = (int) $user['id'];
             $this->pdo->prepare('UPDATE dbo.app_users SET password_hash=:password,auth_version=auth_version+1 WHERE id=:id')->execute(['password' => password_hash($password, PASSWORD_DEFAULT), 'id' => $userId]);
             $this->pdo->prepare('UPDATE dbo.password_reset_tokens SET consumed_at=SYSUTCDATETIME() WHERE user_id=:user AND consumed_at IS NULL')->execute(['user' => $userId]);
-            $key = $this->config->string('APP_KEY') ?: 'development-only-rate-limit-key';
-            $emailHash = hash_hmac('sha256', mb_strtoupper((string) $user['email'], 'UTF-8'), $key);
-            $this->pdo->prepare("DELETE dbo.login_rate_limits WHERE action_code='login_email' AND dimension_hash=CONVERT(binary(32),:hash,2)")->execute(['hash' => $emailHash]);
+            (new LoginRateLimiter($this->pdo, $this->config))->clearEmail((string) $user['email']);
             $this->audit->record(null, 'PASSWORD_RESET', 'APP_USER', (string) $userId, null, null);
             $this->pdo->commit();
             return true;
@@ -120,27 +118,6 @@ final class PasswordResetService
 
     private function passwordResetAllowed(string $email, string $ip): bool
     {
-        $key = $this->config->string('APP_KEY') ?: 'development-only-rate-limit-key';
-        $dimensions = [
-            ['reset_ip', hash_hmac('sha256', $ip, $key)],
-            ['reset_email', hash_hmac('sha256', mb_strtoupper(trim($email), 'UTF-8'), $key)],
-        ];
-        foreach ($dimensions as [$action, $hash]) {
-            $statement = $this->pdo->prepare('SELECT blocked_until FROM dbo.login_rate_limits WHERE action_code=:action AND dimension_hash=CONVERT(binary(32),:hash,2)');
-            $statement->execute(['action' => $action, 'hash' => $hash]);
-            $blockedUntil = $statement->fetchColumn();
-            if (is_string($blockedUntil) && strtotime($blockedUntil . ' UTC') > time()) return false;
-        }
-        foreach ($dimensions as [$action, $hash]) $this->recordRequestAttempt($action, $hash);
-        return true;
-    }
-
-    private function recordRequestAttempt(string $action, string $hash): void
-    {
-        $window = $this->config->int('LOGIN_RATE_WINDOW_SECONDS');
-        $maximum = $this->config->int('LOGIN_RATE_MAX_ATTEMPTS');
-        $block = $this->config->int('LOGIN_RATE_BLOCK_SECONDS');
-        $sql = "MERGE dbo.login_rate_limits WITH(HOLDLOCK) AS target USING(SELECT :action action_code,CONVERT(binary(32),:hash,2) dimension_hash) source ON target.action_code=source.action_code AND target.dimension_hash=source.dimension_hash WHEN MATCHED THEN UPDATE SET attempt_count=CASE WHEN window_started_at<DATEADD(second,CONVERT(int,:window1),SYSUTCDATETIME()) THEN 1 ELSE attempt_count+1 END,window_started_at=CASE WHEN window_started_at<DATEADD(second,CONVERT(int,:window2),SYSUTCDATETIME()) THEN SYSUTCDATETIME() ELSE window_started_at END,blocked_until=CASE WHEN (CASE WHEN window_started_at<DATEADD(second,CONVERT(int,:window3),SYSUTCDATETIME()) THEN 1 ELSE attempt_count+1 END)>=CONVERT(int,:maximum) THEN DATEADD(second,CONVERT(int,:block),SYSUTCDATETIME()) ELSE blocked_until END,updated_at=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(action_code,dimension_hash,window_started_at,attempt_count,updated_at) VALUES(source.action_code,source.dimension_hash,SYSUTCDATETIME(),1,SYSUTCDATETIME());";
-        $this->pdo->prepare($sql)->execute(['action' => $action, 'hash' => $hash, 'window1' => -$window, 'window2' => -$window, 'window3' => -$window, 'maximum' => $maximum, 'block' => $block]);
+        return (new LoginRateLimiter($this->pdo, $this->config, 'reset'))->attempt($email, $ip);
     }
 }
