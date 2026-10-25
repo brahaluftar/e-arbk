@@ -708,13 +708,20 @@ stateDiagram-v2
 #### 8.7.5 UNIREF (`UnirefGenerator`, `UnirefSequence`)
 
 ```
-UNIREF = "PREAH" + NACE4 + SEQ6 + CHECK
-          5 chars  4 [0-9A-Z]  000001–999999  1 char of 0-9A-Z
-CHECK  = ALPHABET[ Σ_{i=0..14} value(base[i]) × (16 − i)  mod 36 ]
-ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+UNIREF = BaseReference (exactly 15 chars) + CHECK                    16 chars
+BaseReference = FixedCode + YearCode + InvoiceCode                  any split, total 15
+  invoices:     "PREAH"   + (none)   + NACE4 [0-9A-Z] + SEQ6 000001–999999
+CHECK  = ALPHABET[ Σ_{i=0..14} value(base[i]) × (16 − i)  mod 36 ]   no complement, not ISO 7064 MOD 37,36
+ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"                    '0'–'9' = 0–9, 'A'–'Z' = 10–35
 ```
 
-The sequence is per NACE code. It is incremented atomically by `MERGE … WITH(HOLDLOCK) … OUTPUT inserted.last_value`. At 999999 it is exhausted and throws "Sekuenca UNIREF për këtë kod NACE është shteruar." ("The UNIREF sequence for this NACE code is exhausted."). `isValid()` checks the format and the check character.
+The input is trimmed and uppercased first. Any other character (space, `-`, `/`, accented letters) is rejected, and so is a base that is not exactly 15 characters (`fromBase()`).
+
+Worked example: `MFA2E8047616648` gives Σ = 1221, 1221 mod 36 = 33, so the check character is `X` and the UNIREF is `MFA2E8047616648X`. `UnirefGeneratorTest` holds the full set of specification vectors.
+
+The sequence is per NACE code. It is incremented atomically by `MERGE … WITH(HOLDLOCK) … OUTPUT inserted.last_value`. At 999999 it is exhausted and throws "Sekuenca UNIREF për këtë kod NACE është shteruar." ("The UNIREF sequence for this NACE code is exhausted.").
+
+`isValid()` accepts any 16 alphanumeric characters whose 16th character equals the check character of the first 15. `UX_business_invoices_uniref` keeps UNIREFs unique. A duplicate is reported as "UNIREF-i … ekziston tashmë." ("UNIREF … already exists.").
 
 #### 8.7.6 Invoice documents
 
@@ -1112,7 +1119,7 @@ Logs go to `/cloudclusters/arbk/shared/log/{imports,annual-invoices,scheduled}.l
 | `InvoicePdfRendererTest` | PDF renders |
 | `PasswordResetServiceTest` | Token format and password rules |
 | `ProductionValidatorTest` | Graph config rules |
-| `UnirefGeneratorTest` | Format and check digit |
+| `UnirefGeneratorTest` | Specification vectors (sum, remainder, check character), rejected bases, validation |
 | `UserManagementServiceTest` | Validation, duplicates, self-protection, stale form |
 | `XlsxWriterTest` | Unicode and leading-zero text |
 | `tests/deploy-vhost-transform.test.sh` | Apache vhost awk transform |

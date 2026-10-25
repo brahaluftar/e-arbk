@@ -5,6 +5,7 @@ namespace App\Billing;
 use App\Service\AuditLogger;
 use DomainException;
 use PDO;
+use PDOException;
 
 /**
  * The only place that inserts invoices. Every invoice gets a UNIREF (also used as its number unless
@@ -42,7 +43,7 @@ final class InvoiceFactory
         if ($number === '') $number = $uniref;
         $statement = $this->pdo->prepare("INSERT dbo.business_invoices(business_id,business_unit_id,fiscal_year,invoice_number,uniref,amount,issued_on,due_on,notes,created_by_user_id,status_code,period_start,period_end,billed_months,annual_tariff,currency,business_name_snapshot,business_address_snapshot,fiscal_number_snapshot,registration_number_snapshot,registered_nace_code_snapshot,tariff_nace_code_snapshot,nace_description_snapshot)
             OUTPUT inserted.id VALUES(:business,:unit,:year,:number,:uniref,:amount,CONVERT(date,:issued),CONVERT(date,:due),:notes,:actor,'ISSUED',CONVERT(date,:period_start),CONVERT(date,:period_end),:months,:annual,'EUR',:name,:address,:fiscal,:registration,:registered_nace,:tariff_nace,:description)");
-        $statement->execute([
+        $values = [
             'business' => (int) $draft['business_id'],
             'unit' => isset($draft['business_unit_id']) ? (int) $draft['business_unit_id'] : null,
             'year' => $year,
@@ -64,7 +65,14 @@ final class InvoiceFactory
             'registered_nace' => $this->text($draft['registered_nace'] ?? $nace, 20),
             'tariff_nace' => $this->text($draft['tariff_nace'] ?? null, 20),
             'description' => $this->text($draft['nace_description'] ?? null, 510),
-        ]);
+        ];
+        try {
+            $statement->execute($values);
+        } catch (PDOException $e) {
+            // UX_business_invoices_uniref: the same base reference may never be invoiced twice.
+            if (str_contains($e->getMessage(), 'UX_business_invoices_uniref')) throw new DomainException('UNIREF-i ' . $uniref . ' ekziston tashmë.', 0, $e);
+            throw $e;
+        }
         $id = (int) $statement->fetchColumn();
         $statement->closeCursor();
         $this->history->record($id, 'CREATED', ['amount' => $amount, 'uniref' => $uniref], $this->text($draft['notes'] ?? null, 1000), $actorId);
