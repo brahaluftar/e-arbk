@@ -19,6 +19,7 @@ try {
     $tableStatement->closeCursor();unset($tableStatement);
     foreach(App\Deployment\DatabaseTransfer::TABLES as $table)if(!in_array($table,$existingTables,true))$errors[]="Missing database table: dbo.$table.";
     foreach(App\Deployment\DatabaseTransfer::VIEWS as $view) if(!$pdo->query("SELECT OBJECT_ID('dbo.$view','V')")->fetchColumn()) $errors[]="Missing database view: dbo.$view.";
+    foreach(App\Deployment\DatabaseTransfer::ROUTINES as $routine=>$type) if(!$pdo->query("SELECT OBJECT_ID('dbo.$routine','$type')")->fetchColumn()) $errors[]="Missing database routine: dbo.$routine.";
     if(!is_file($root.'/resources/fonts/LiberationSans-Regular.json')) $errors[]='Invoice PDF fonts are missing (resources/fonts).';
     $migrationStatement=$pdo->query('SELECT migration FROM dbo.schema_migrations');
     $applied=$migrationStatement->fetchAll(PDO::FETCH_COLUMN);

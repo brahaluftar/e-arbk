@@ -30,6 +30,19 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 | 7 | Permit only without debt | The work permit can be issued only for an active business with no unpaid balance (main business and units). The business page shows the debt and why the permit is blocked. Permits can be revoked with a reason and downloaded by staff. | Business page → Lejet |
 | 8 | Registration and invoicing of units | Units are registered and fully edited (name, address, contacts, NACE of exactly 4 characters, tariff, automatic invoicing, active). Annual jobs now include every active unit with automatic invoicing; a single unit can be invoiced for any year. | Business page → Njësitë; Financat → Faturimi vjetor |
 
+## UNIREF check (added later)
+
+- The check character follows the MOD-36 specification: weights 16..2, remainder mapped directly to 0-9A-Z, no complement. Validation accepts any 16-character code, and a base reference that is not exactly 15 characters is rejected.
+- Migration `0027_uniref_check_character_procedure.sql` adds `dbo.usp_fix_uniref_check_characters`. It checks the check character of every invoice UNIREF and, with `@apply = 1`, corrects the wrong ones. From the server:
+
+  ```bash
+  php bin/fix-uniref-check-characters.php           # report only
+  php bin/fix-uniref-check-characters.php --apply   # correct the wrong ones
+  ```
+
+  Or in SQL: `EXEC dbo.usp_fix_uniref_check_characters @apply = 1;`
+- Issuing an invoice whose UNIREF already exists stops with "UNIREF-i … ekziston tashmë." instead of a SQL error.
+
 ## Bug fixes
 
 | Bug | Fix |
@@ -81,4 +94,4 @@ Mobile-first redesign (LLD §17): grouped navigation that collapses into a menu 
 
 ## Not verified here
 
-The code was linted and unit-tested (52 tests) and every screen was rendered and screenshotted, but no SQL Server was available: the migration and the new SQL must be run on a staging copy of the database before production.
+The code was linted and unit-tested, and every screen was rendered and screenshotted. All migrations (0001–0027) were applied to an empty SQL Server 2022 database, with stand-in ARBK tables. The UNIREF procedure, invoice creation and the database transfer were run against it. The other new SQL has not been run against real data, so test on a staging copy of the database before production.

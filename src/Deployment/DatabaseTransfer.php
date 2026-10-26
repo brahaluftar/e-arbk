@@ -13,6 +13,8 @@ final class DatabaseTransfer
     public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
     /** Views recreated after the data, in dependency order. */
     public const VIEWS = ['v_business_master','v_invoice_balance','v_business_billing'];
+    /** Functions and procedures recreated after the views, in dependency order (name => sys.objects type). */
+    public const ROUTINES = ['fn_uniref_check_character'=>'FN','usp_fix_uniref_check_characters'=>'P'];
     private const JSON = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
     public static function quote(string $name): string { return '['.str_replace(']',']]', $name).']'; }
@@ -76,6 +78,11 @@ final class DatabaseTransfer
                 $view=$pdo->query("SELECT OBJECT_DEFINITION(OBJECT_ID('dbo.".$viewName."'))")->fetchColumn();
                 if (!is_string($view) || $view==='') throw new RuntimeException('View definition is unavailable: '.$viewName);
                 $manifest['after'][]=preg_replace('/\b(?:CREATE\s+OR\s+ALTER|ALTER)\s+VIEW\b/i','CREATE VIEW',$view,1);
+            }
+            foreach (array_keys(self::ROUTINES) as $routineName) {
+                $routine=$pdo->query("SELECT OBJECT_DEFINITION(OBJECT_ID('dbo.".$routineName."'))")->fetchColumn();
+                if (!is_string($routine) || $routine==='') throw new RuntimeException('Routine definition is unavailable: '.$routineName);
+                $manifest['after'][]=preg_replace('/\b(?:CREATE\s+OR\s+ALTER|ALTER)\s+(FUNCTION|PROCEDURE)\b/i','CREATE $1',$routine,1);
             }
             foreach ($pdo->query('SELECT id,storage_path,file_sha256 FROM dbo.business_import_runs')->fetchAll() as $run) {
                 $relative=str_replace('\\','/',(string)$run['storage_path']);
