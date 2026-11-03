@@ -147,6 +147,7 @@ button[disabled]{opacity:.55;cursor:not-allowed}
   .table td{display:grid;grid-template-columns:minmax(100px,32%) minmax(0,1fr);gap:var(--s-2);padding:var(--s-2) 0;border-bottom:1px dashed var(--c-border-soft);overflow-wrap:anywhere}
   .table td::before{content:attr(data-label);color:var(--c-text-muted);font-size:var(--fs-xs);font-weight:800;text-transform:uppercase}
   .table td.num{text-align:left}
+  .table td.num::before{white-space:normal}
   .table td>*{grid-column:2;justify-self:start}
   .table td:first-child>*,.table td.actions>*{grid-column:auto}
   .table td:first-child{grid-template-columns:1fr}
@@ -213,6 +214,10 @@ button[disabled]{opacity:.55;cursor:not-allowed}
 .chart-list .hbar{width:100%;height:14px;border-radius:3px;background:var(--c-bg)}
 .chart-list .values{grid-column:2;color:var(--c-text-muted);font-size:var(--fs-xs)}
 @media (min-width:768px){.chart-svg{display:block}.chart-list{display:none}}
+.chart-hit{fill:transparent}.chart-link:hover .chart-hit,.chart-link:focus .chart-hit{fill:var(--c-primary-soft)}.chart-link:focus{outline:none}
+.crumbs{display:flex;flex-wrap:wrap;gap:var(--s-1) var(--s-2);margin:0 0 var(--s-3);padding:0;list-style:none;font-size:var(--fs-sm)}
+.crumbs li+li::before{content:'›';margin-right:var(--s-2);color:var(--c-text-muted)}
+.crumbs [aria-current]{font-weight:700}
 
 footer{padding:var(--s-4);text-align:center;color:var(--c-text-muted);font-size:var(--fs-sm)}
 @media print{
