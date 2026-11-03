@@ -7,6 +7,7 @@
   <div><dt>Për shqyrtim</dt><dd><?=(int)$batch['review_rows']?></dd></div>
   <div class="is-strong"><dt>Shuma e aplikuar</dt><dd><?=e(money($batch['applied_amount']))?></dd></div>
 </dl>
+<?php if($batch['restored_at']):?><p class="notice">Të hyrat u rindërtuan vetëm nga ky raport më <?=e(datetime_sq($batch['restored_at']))?> nga <?=e($batch['restored_by']??'—')?>.</p><?php endif;?>
 <?php if($batch['error_message']):?><p class="notice notice--danger"><?=e($batch['error_message'])?></p><?php endif;?>
 <nav class="tabs"><a href="?id=<?=(int)$batch['id']?>"<?=$onlyReview?' aria-current="page"':''?>>Për shqyrtim</a><a href="?id=<?=(int)$batch['id']?>&amp;all=1"<?=!$onlyReview?' aria-current="page"':''?>>Të gjitha rreshtat</a></nav>
 <?php if($rows===[]):?><section class="card empty"><?=$onlyReview?'Të gjitha pagesat u aplikuan. Nuk ka asgjë për shqyrtim.':'Raporti nuk ka rreshta.'?></section><?php else:?>
@@ -24,4 +25,21 @@
     </tr>
   <?php endforeach;?></tbody>
 </table></div>
+<?php endif;?>
+<?php if($batch['status_code']==='COMPLETED'):?>
+<section class="card card--danger" id="rindertimi" aria-labelledby="restore-title">
+  <h2 id="restore-title">Rindërto të hyrat vetëm nga ky raport</h2>
+  <details class="disclosure"><summary>Fshi të gjitha pagesat dhe apliko vetëm këtë raport…</summary>
+    <ul class="small">
+      <li>Fshihen <strong>të gjitha</strong> pagesat aktuale: nga raportet e tjera, manuale dhe të stornuara.</li>
+      <li>Pastaj rreshtat e këtij raporti aplikohen përsëri ndaj faturave aktuale. Rreshtat që nuk gjejnë faturë, tejkalojnë mbetjen ose përsëriten mbeten për shqyrtim.</li>
+      <li>Gjithçka kryhet në një hap: nëse ndodh një gabim, nuk ndryshon asgjë.</li>
+    </ul>
+    <form method="post" action="<?=e(app_url('/admin/finance/restore-payments.php'))?>" class="form-grid"><?=csrf_field()?><input type="hidden" name="batch_id" value="<?=(int)$batch['id']?>">
+      <label class="field">Komenti (i detyrueshëm)<textarea name="comment" maxlength="1000" required placeholder="P.sh. Rindërtim nga raporti kumulativ i Drejtorisë së Financave."></textarea></label>
+      <label class="field"><span>Shkruani <strong>FSHI</strong> për të konfirmuar</span><input name="confirm" required autocomplete="off" pattern="[Ff][Ss][Hh][Ii]"></label>
+      <div class="form-actions"><button class="btn--danger">Rindërto të hyrat nga ky raport</button></div>
+    </form>
+  </details>
+</section>
 <?php endif;?>

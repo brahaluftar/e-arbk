@@ -89,6 +89,102 @@ final class PaymentImportService
         }
     }
 
+    /**
+     * Deletes every payment, manual and imported, reversed ones included: invoices become unpaid again and the
+     * applied report rows become CLEARED, so one report can later be applied again with restoreFrom().
+     * @return array{payments:int,invoices:int,amount:float}
+     */
+    public function clearAll(int $userId, string $comment): array
+    {
+        $comment = self::comment($comment);
+        $this->pdo->beginTransaction();
+        try {
+            $cleared = $this->clear($userId, $comment);
+            $this->audit->record($userId, 'PAYMENTS_CLEARED', 'INVOICE_PAYMENT', 'ALL', null, $cleared + ['comment' => $comment]);
+            $this->pdo->commit();
+            return $cleared;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Rebuilds the revenue from one report only: clears every payment, then applies the stored rows of the report
+     * again against the current invoices (all in one transaction; nothing changes if it fails).
+     * @return array{cleared:array{payments:int,invoices:int,amount:float},total:int,applied:int,duplicate:int,review:int,amount:float}
+     */
+    public function restoreFrom(int $batchId, int $userId, string $comment): array
+    {
+        $comment = self::comment($comment);
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('SELECT status_code FROM dbo.payment_import_batches WITH(UPDLOCK,HOLDLOCK) WHERE id=:id');
+            $statement->execute(['id' => $batchId]);
+            $status = $statement->fetchColumn();
+            $statement->closeCursor();
+            if ($status === false) throw new DomainException('Raporti i pagesave nuk u gjet.');
+            if ($status !== 'COMPLETED') throw new DomainException('Të hyrat mund të rindërtohen vetëm nga një raport i përpunuar plotësisht.');
+            $cleared = $this->clear($userId, $comment);
+            $statement = $this->pdo->prepare("SELECT id,uniref,invoice_number,amount,paid_on,reference FROM dbo.payment_import_rows WHERE batch_id=:batch AND status_code<>'INVALID' ORDER BY source_row_number");
+            $statement->execute(['batch' => $batchId]);
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+            $statement->closeCursor();
+            foreach ($rows as $row) $this->applyStoredRow($row, $batchId, $userId);
+            $summary = $this->finishCounters($batchId);
+            $this->pdo->prepare('UPDATE dbo.payment_import_batches SET restored_at=SYSUTCDATETIME(),restored_by_user_id=:user WHERE id=:id')->execute(['user' => $userId, 'id' => $batchId]);
+            $this->audit->record($userId, 'PAYMENTS_RESTORED_FROM_IMPORT', 'PAYMENT_IMPORT_BATCH', (string)$batchId, null, $summary + ['cleared' => $cleared, 'comment' => $comment]);
+            $this->pdo->commit();
+            return ['cleared' => $cleared] + $summary;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /** @return array{payments:int,invoices:int,amount:float} */
+    private function clear(int $userId, string $comment): array
+    {
+        // The exclusive table lock keeps payments and imports from other users out until the transaction ends.
+        $totals = $this->pdo->query('SELECT COUNT(*) payments,COUNT(DISTINCT invoice_id) invoices,COALESCE(SUM(CASE WHEN reversed_at IS NULL THEN amount ELSE 0 END),0) amount FROM dbo.business_invoice_payments WITH(TABLOCKX,HOLDLOCK)')->fetch(PDO::FETCH_ASSOC) ?: [];
+        $this->pdo->prepare("INSERT dbo.business_invoice_events(invoice_id,event_code,changes_json,comment,actor_user_id)
+            SELECT invoice_id,'PAYMENTS_CLEARED',CONCAT('{\"payments\":',COUNT(*),',\"amount\":',CONVERT(varchar(30),COALESCE(SUM(CASE WHEN reversed_at IS NULL THEN amount END),0)),'}'),:comment,:actor
+            FROM dbo.business_invoice_payments GROUP BY invoice_id")->execute(['comment' => $comment, 'actor' => $userId]);
+        $this->pdo->exec("UPDATE dbo.payment_import_rows SET payment_id=NULL,
+                status_code=CASE WHEN status_code='APPLIED' THEN 'CLEARED' ELSE status_code END,
+                message=CASE WHEN status_code='APPLIED' THEN N'Pagesa u fshi me pastrimin e të hyrave.' ELSE message END
+            WHERE payment_id IS NOT NULL OR status_code='APPLIED'");
+        $this->pdo->exec('DELETE FROM dbo.business_invoice_payments');
+        $this->pdo->exec("UPDATE dbo.business_invoices SET status_code='ISSUED' WHERE status_code IN('PAID','PARTIALLY_PAID')");
+        foreach ($this->pdo->query('SELECT id FROM dbo.payment_import_batches')->fetchAll(PDO::FETCH_COLUMN) as $batchId) $this->finishCounters((int)$batchId);
+        return ['payments' => (int)($totals['payments'] ?? 0), 'invoices' => (int)($totals['invoices'] ?? 0), 'amount' => (float)($totals['amount'] ?? 0)];
+    }
+
+    /** Applies a stored report row again (inside the caller's transaction). @param array<string,mixed> $row */
+    private function applyStoredRow(array $row, int $batchId, int $userId): void
+    {
+        $update = function (string $status, ?string $message, ?int $invoiceId, ?int $paymentId) use ($row): void {
+            $this->pdo->prepare('UPDATE dbo.payment_import_rows SET status_code=:status,message=:message,invoice_id=:invoice,payment_id=:payment WHERE id=:id')
+                ->execute(['status' => $status, 'message' => $message === null ? null : mb_substr($message, 0, 500), 'invoice' => $invoiceId, 'payment' => $paymentId, 'id' => $row['id']]);
+        };
+        if ($row['amount'] === null || $row['paid_on'] === null) { $update('INVALID', 'Shuma ose data e pagesës mungon.', null, null); return; }
+        $invoiceId = $this->findInvoice($row['uniref'] === null ? null : (string)$row['uniref'], $row['invoice_number'] === null ? null : (string)$row['invoice_number']);
+        if ($invoiceId === null) { $update('UNMATCHED', 'Nuk u gjet faturë me këtë UNIREF / numër.', null, null); return; }
+        try {
+            $paymentId = $this->ledger->applyPayment($invoiceId, number_format((float)$row['amount'], 2, '.', ''), substr((string)$row['paid_on'], 0, 10), (string)($row['reference'] ?? ''), 'Rindërtuar nga raporti i pagesave #'.$batchId.'.', $userId, (int)$row['id'], true);
+            $update('APPLIED', null, $invoiceId, $paymentId);
+        } catch (PaymentRejectedException $rejected) {
+            $update($rejected->reason, $rejected->getMessage(), $invoiceId, null);
+        }
+    }
+
+    private static function comment(string $comment): string
+    {
+        $comment = trim($comment);
+        if ($comment === '' || mb_strlen($comment) > 1000) throw new DomainException('Koment është i detyrueshëm: shkruani pse po fshihen të hyrat (deri në 1000 karaktere).');
+        return $comment;
+    }
+
     /** @param array<string,?string> $data */
     private function processRow(int $batchId, int $rowNumber, array $data, int $userId): void
     {
@@ -167,7 +263,7 @@ final class PaymentImportService
     /** @return array<string,int|float> */
     private function finishCounters(int $batchId): array
     {
-        $statement = $this->pdo->prepare("SELECT COUNT(*) total,SUM(CASE WHEN status_code='APPLIED' THEN 1 ELSE 0 END) applied,SUM(CASE WHEN status_code='DUPLICATE' THEN 1 ELSE 0 END) duplicate,SUM(CASE WHEN status_code NOT IN('APPLIED','DUPLICATE') THEN 1 ELSE 0 END) review,COALESCE(SUM(CASE WHEN status_code='APPLIED' THEN amount ELSE 0 END),0) amount FROM dbo.payment_import_rows WHERE batch_id=:id");
+        $statement = $this->pdo->prepare("SELECT COUNT(*) total,SUM(CASE WHEN status_code='APPLIED' THEN 1 ELSE 0 END) applied,SUM(CASE WHEN status_code='DUPLICATE' THEN 1 ELSE 0 END) duplicate,SUM(CASE WHEN status_code NOT IN('APPLIED','DUPLICATE','CLEARED') THEN 1 ELSE 0 END) review,COALESCE(SUM(CASE WHEN status_code='APPLIED' THEN amount ELSE 0 END),0) amount FROM dbo.payment_import_rows WHERE batch_id=:id");
         $statement->execute(['id' => $batchId]);
         $s = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
         $statement->closeCursor();

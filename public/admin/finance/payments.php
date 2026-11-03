@@ -7,4 +7,5 @@ $query=mb_substr(trim((string)($_GET['q']??'')),0,120);
 $payable=$repository->payable($query);
 $imports=$repository->paymentImports(20);
 $recent=$repository->recentPayments(30);
-render('admin/finance/payments','Pagesat',compact('query','payable','imports','recent'));
+$totals=$repository->paymentTotals();
+render('admin/finance/payments','Pagesat',compact('query','payable','imports','recent','totals'));

@@ -51,6 +51,17 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 - The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
 - **Missing email/municipality settings no longer stop the application.** `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MUNICIPALITY_NAME`, `MUNICIPALITY_ADDRESS`, `MUNICIPALITY_CONTACT` and `MUNICIPAL_BANK_ACCOUNT` are now warnings: they are shown by the preflight, the deploy and the admin dashboard. Until they are set, emails are not sent and invoices print those fields blank. The security checks (HTTPS, APP_KEY, database encryption, debug off) still stop the application.
 
+## Clear the revenue and rebuild it from one report (November 2026)
+
+Migration `0028_payment_clear_and_restore.sql`.
+
+- **Financat → Pagesat → Pastro të hyrat:** deletes every payment, imported and manual (reversed ones too). All invoices become unpaid again. The imported reports are kept.
+- **Report page → Rindërto të hyrat vetëm nga ky raport:** deletes every payment, then applies only that report's rows again against the current invoices. Rows without an invoice, overpayments and duplicates stay for review, as in a normal import.
+  - It runs as one step: if anything fails, nothing changes.
+  - The report shows when and by whom it was used for a rebuild.
+- **Safeguards:** both actions need a comment and typing **FSHI** to confirm. They are recorded in each invoice's history ("Pagesat u fshinë") and in the audit log.
+- **Testing:** checked on SQL Server with two reports, a manual payment and a reversed payment: clear, rebuild from report B, then from report A, plus a failure forced half-way that left everything unchanged.
+
 ## Revenue drill-down (November 2026)
 
 **Financat → Të hyrat** (`/admin/finance/revenue.php`) shows the year's revenue at any level of detail.

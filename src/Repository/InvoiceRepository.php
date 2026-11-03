@@ -169,16 +169,23 @@ final class InvoiceRepository
     }
 
     /** @return list<array<string,mixed>> */
+    /** Current revenue: payments that count (not reversed). @return array{payments:int,amount:float,imports:int} */
+    public function paymentTotals(): array
+    {
+        $row = $this->pdo->query('SELECT (SELECT COUNT(*) FROM dbo.business_invoice_payments WHERE reversed_at IS NULL) payments,(SELECT COALESCE(SUM(amount),0) FROM dbo.business_invoice_payments WHERE reversed_at IS NULL) amount,(SELECT COUNT(*) FROM dbo.payment_import_batches) imports')->fetch(PDO::FETCH_ASSOC) ?: [];
+        return ['payments' => (int)($row['payments'] ?? 0), 'amount' => (float)($row['amount'] ?? 0), 'imports' => (int)($row['imports'] ?? 0)];
+    }
+
     public function paymentImports(int $limit = 30): array
     {
         $limit = max(1, min(100, $limit));
-        return $this->pdo->query("SELECT TOP ($limit) bt.*,u.full_name uploaded_by FROM dbo.payment_import_batches bt LEFT JOIN dbo.app_users u ON u.id=bt.uploaded_by_user_id ORDER BY bt.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        return $this->pdo->query("SELECT TOP ($limit) bt.*,u.full_name uploaded_by,r.full_name restored_by FROM dbo.payment_import_batches bt LEFT JOIN dbo.app_users u ON u.id=bt.uploaded_by_user_id LEFT JOIN dbo.app_users r ON r.id=bt.restored_by_user_id ORDER BY bt.id DESC")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** @return array<string,mixed>|null */
     public function paymentImport(int $batchId): ?array
     {
-        $statement = $this->pdo->prepare('SELECT bt.*,u.full_name uploaded_by FROM dbo.payment_import_batches bt LEFT JOIN dbo.app_users u ON u.id=bt.uploaded_by_user_id WHERE bt.id=:id');
+        $statement = $this->pdo->prepare('SELECT bt.*,u.full_name uploaded_by,r.full_name restored_by FROM dbo.payment_import_batches bt LEFT JOIN dbo.app_users u ON u.id=bt.uploaded_by_user_id LEFT JOIN dbo.app_users r ON r.id=bt.restored_by_user_id WHERE bt.id=:id');
         $statement->execute(['id' => $batchId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         return is_array($row) ? $row : null;
@@ -187,7 +194,7 @@ final class InvoiceRepository
     /** @return list<array<string,mixed>> */
     public function paymentImportRows(int $batchId, bool $onlyReview): array
     {
-        $statement = $this->pdo->prepare('SELECT r.*,i.invoice_number matched_invoice_number,i.business_name_snapshot FROM dbo.payment_import_rows r LEFT JOIN dbo.business_invoices i ON i.id=r.invoice_id WHERE r.batch_id=:batch'.($onlyReview ? " AND r.status_code<>'APPLIED'" : '').' ORDER BY r.source_row_number');
+        $statement = $this->pdo->prepare('SELECT r.*,i.invoice_number matched_invoice_number,i.business_name_snapshot FROM dbo.payment_import_rows r LEFT JOIN dbo.business_invoices i ON i.id=r.invoice_id WHERE r.batch_id=:batch'.($onlyReview ? " AND r.status_code NOT IN('APPLIED','CLEARED')" : '').' ORDER BY r.source_row_number');
         $statement->execute(['batch' => $batchId]);
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
