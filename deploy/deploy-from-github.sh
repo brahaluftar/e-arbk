@@ -233,6 +233,12 @@ stage_release() {
     [[ ! -e "$staging/config/.env" && ! -e "$staging/.env" ]] || die 'The repository contains an .env file; refusing to deploy it.'
     printf 'commit=%s\nref=%s\nrepository=%s\ndeployed_at=%s\n' "$commit" "$REF" "${REPO_URL%%\?*}" "$(date -u +%FT%TZ)" > "$staging/REVISION"
 
+    # Syntax newer than the server's PHP only fails when that file is loaded (e.g. only the PDFs), so check every file first.
+    log "Checking PHP syntax with $("$PHP_BIN" -r 'echo PHP_VERSION;')."
+    local lint_errors
+    lint_errors=$(find "$staging" -path "$staging/vendor" -prune -o -name '*.php' -print0 | xargs -0 -n 1 -P 4 "$PHP_BIN" -n -l 2>&1 | grep -v '^No syntax errors detected' || true)
+    [[ -z "$lint_errors" ]] || { printf '%s\n' "$lint_errors" >&2; rm -rf "$staging"; die "The release does not run on PHP $("$PHP_BIN" -r 'echo PHP_VERSION;') (see above)."; }
+
     log 'Installing PHP dependencies (composer, no dev packages).'
     # shellcheck disable=SC2086 # COMPOSER_FLAGS holds extra options on purpose
     run_composer install --working-dir="$staging" --no-dev --prefer-dist --no-interaction --no-progress --classmap-authoritative $COMPOSER_FLAGS

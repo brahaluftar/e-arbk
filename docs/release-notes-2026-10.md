@@ -43,6 +43,13 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
   Or in SQL: `EXEC dbo.usp_fix_uniref_check_characters @apply = 1;`
 - Issuing an invoice whose UNIREF already exists stops with "UNIREF-i … ekziston tashmë." instead of a SQL error.
 
+## PHP 8.1 fix and invoice reset (November 2026)
+
+- **Invoice and permit PDFs did not open on PHP 8.1.** `PdfText` declared a constant inside a trait, which needs PHP 8.2. The font name now lives in `App\Document\PdfFont`. The whole code base was linted and unit-tested on PHP 8.1.
+- **Deploy checks the PHP version.** `deploy-from-github.sh` now lints every PHP file with the server's PHP before migrating or switching. A release that does not run there is stopped and the live site stays as it was.
+- **Reset all invoices.** `php bin/reset-invoices.php --confirm` deletes every invoice and everything that depends on it: payments, payment imports, history, appeals, annual jobs and invoice emails. It resets the UNIREF sequences and removes the old PDF/XLSX exports, and new invoices start again at id 1 and UNIREF 000001. Businesses, units, users, classifications and work permits stay. The same SQL is in `database/manual/truncate_all_invoices_and_details.sql` for SQL Server Management Studio.
+- The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
+
 ## Bug fixes
 
 | Bug | Fix |

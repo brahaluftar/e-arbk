@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace App\Billing;
+use App\Document\PdfFont;
 use App\Document\PdfText;
 use App\Support\Config;
 use RuntimeException;
@@ -28,7 +29,7 @@ final class InvoicePdfRenderer
     /** @param array<string,mixed> $i */
     public function append(\FPDF $pdf,array $i,string $language='sq'):void
     {
-        $tr=new InvoiceTranslations($language,$this->config);$font=self::PDF_FONT;
+        $tr=new InvoiceTranslations($language,$this->config);$font=PdfFont::NAME;
         $this->registerFonts($pdf);$pdf->SetAutoPageBreak(false);
         $pdf->SetMargins(22,18,22);$pdf->AddPage();$pdf->SetDrawColor(...self::LINE);$pdf->SetTextColor(...self::INK);
 
@@ -85,7 +86,7 @@ final class InvoicePdfRenderer
         $pdf->SetTextColor(...self::INK);
     }
 
-    private function card(\FPDF $pdf,float $x,float $y,float $w,float $h,string $title):void{$pdf->SetFillColor(...self::PALE);$pdf->Rect($x,$y,$w,$h,'DF');$pdf->SetTextColor(...self::BLUE);$pdf->SetXY($x+4,$y+5);$pdf->SetFont(self::PDF_FONT,'B',9);$pdf->Cell($w-8,5,$this->t($title));$pdf->SetTextColor(...self::INK);}
+    private function card(\FPDF $pdf,float $x,float $y,float $w,float $h,string $title):void{$pdf->SetFillColor(...self::PALE);$pdf->Rect($x,$y,$w,$h,'DF');$pdf->SetTextColor(...self::BLUE);$pdf->SetXY($x+4,$y+5);$pdf->SetFont(PdfFont::NAME,'B',9);$pdf->Cell($w-8,5,$this->t($title));$pdf->SetTextColor(...self::INK);}
     private function barcode(\FPDF $pdf,float $x,float $y,float $w,float $h,string $value):void{$value='*'.strtoupper($value).'*';$bits='';foreach(str_split($value) as $char)$bits.=(self::CODE39[$char]??self::CODE39['-']).'0';$unit=$w/max(1,strlen($bits));$pdf->SetFillColor(0,0,0);foreach(str_split($bits) as $index=>$bit)if($bit==='1')$pdf->Rect($x+$index*$unit,$y,$unit+.03,$h,'F');}
     private function money(mixed $amount):string{return $this->t(number_format((float)$amount,2,',','.').' €');}
     private function date(mixed $value):string{if($value===null||$value==='')return '—';$time=strtotime(substr((string)$value,0,10));return $time===false?(string)$value:date('d.m.Y',$time);}
