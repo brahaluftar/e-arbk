@@ -535,10 +535,11 @@ COALESCE(s.status_code, CASE WHEN a.ATK_MBYLLUR = 1 THEN 'DEACTIVATED' ELSE 'ACT
 | 0025 | business_unit_contacts_and_import | Unit email/manager, UNITS import, unit identity index |
 | 0026 | billing_consistency_and_finance | Payment storno columns; `business_invoice_events` (history with comments); `payment_import_batches` / `payment_import_rows` (Finance Directorate reports); job items get `id` + `business_unit_id`; views `v_invoice_balance` and `v_business_billing`; invoice status backfill; cached PDF keys cleared |
 | 0027 | uniref_check_character_procedure | Function `fn_uniref_check_character` (MOD-36 check character in T-SQL) and procedure `usp_fix_uniref_check_characters` (checks every invoice UNIREF and corrects a wrong check character) |
+| 0028 | payment_clear_and_restore | Report row status `CLEARED`, invoice event `PAYMENTS_CLEARED`, `payment_import_batches.restored_at` / `restored_by_user_id` |
 
 **Runner** (`bin/migrate.php`): creates `schema_migrations` if it is missing; runs each pending `*.sql` in name order; splits batches on lines that contain only `GO`; wraps **each file** in one transaction; records the file name.
 
-**Rules for new migrations:** next number `0028_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
+**Rules for new migrations:** next number `0029_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
 
 ---
 
@@ -886,7 +887,20 @@ Legend: **A** ADMIN, **O** OFFICIAL, **R** READ_ONLY, **B** BUSINESS, **P** publ
 | `/admin/permits/revoke.php` | POST (A, O) | Revoke a permit with a reason |
 | `/admin/permits/pdf.php?id=` | GET (staff) | Download an issued permit |
 | `/admin/imports/retry.php` | POST | Re-queue a failed import |
+| `/admin/finance/clear-payments.php` | POST | Delete every payment (`comment`, `confirm=FSHI`) |
+| `/admin/finance/restore-payments.php` | POST | Rebuild the revenue from one report only (`batch_id`, `comment`, `confirm=FSHI`) |
 | `/admin/finance/revenue.php` | GET | Revenue drill-down (November 2026): `year`, then `section` → `division` → `nace` (`-` = no code), or `view=months` → `month`; `export=1[&sheet=1]` downloads the current level as XLSX |
+
+**Clearing and rebuilding the revenue** (`PaymentImportService::clearAll()` / `restoreFrom()`, ADMIN, comment and typed `FSHI` required):
+
+- **Clear** deletes every payment in one transaction: manual and imported, reversed ones included. The payments table is locked exclusively while it runs.
+  - Invoices go back to `ISSUED`; cancelled ones stay cancelled.
+  - Every invoice that had payments gets a `PAYMENTS_CLEARED` history event with the count, amount and comment.
+  - Applied report rows become `CLEARED`; review rows keep their status. The batch counters are recomputed, and an audit row `PAYMENTS_CLEARED` is written.
+- **Rebuild from one report** clears, then applies the stored rows of that report (all except `INVALID`) again against the current invoices, with the same checks as an import: match by UNIREF or number, duplicates, overpayment, cancelled invoice.
+  - The batch records `restored_at`/`restored_by_user_id`, and the audit row is `PAYMENTS_RESTORED_FROM_IMPORT`.
+  - Only `COMPLETED` reports can be used.
+  - Everything runs in one transaction: a failure part-way leaves the previous payments untouched.
 
 **Revenue drill-down** (`RevenueRepository`, `App\Support\NaceSections`):
 

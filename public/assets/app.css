@@ -172,6 +172,7 @@ button[disabled]{opacity:.55;cursor:not-allowed}
 .flash--success{border-color:var(--c-success);background:var(--c-success-soft);color:#11502f}
 .notice{padding:var(--s-3) var(--s-4);border-radius:var(--r-sm);background:var(--c-warning-soft);color:var(--c-warning)}
 .notice--danger{background:var(--c-danger-soft);color:var(--c-danger)}
+.card--danger{border-color:var(--c-danger);border-top:3px solid var(--c-danger)}.card--danger h2{color:var(--c-danger)}
 .empty{padding:var(--s-5);text-align:center;color:var(--c-text-muted)}
 .pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s-2);margin-top:var(--s-3);font-size:var(--fs-sm)}
 .dl-grid{display:grid;gap:var(--s-2);grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));margin:0}

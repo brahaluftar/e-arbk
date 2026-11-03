@@ -22,7 +22,7 @@
     <thead><tr><th>Raporti</th><th>Statusi</th><th class="num">Rreshta</th><th class="num">Aplikuar</th><th class="num">Për shqyrtim</th><th class="num">Shuma e aplikuar</th><th><span class="visually-hidden">Veprime</span></th></tr></thead>
     <tbody><?php foreach($imports as $batch):?>
       <tr>
-        <td><a class="cell-title" href="<?=e(app_url('/admin/finance/payment-import.php?id='.(int)$batch['id']))?>"><?=e($batch['original_filename'])?></a><span class="cell-sub"><?=e(($batch['uploaded_by']??'').' · '.datetime_sq($batch['created_at']))?></span></td>
+        <td><a class="cell-title" href="<?=e(app_url('/admin/finance/payment-import.php?id='.(int)$batch['id']))?>"><?=e($batch['original_filename'])?></a><span class="cell-sub"><?=e(($batch['uploaded_by']??'').' · '.datetime_sq($batch['created_at']))?></span><?php if($batch['restored_at']):?><span class="cell-sub">Të hyrat u rindërtuan nga ky raport · <?=e(datetime_sq($batch['restored_at']).' · '.($batch['restored_by']??''))?></span><?php endif;?></td>
         <td data-label="Statusi"><?=badge('import',$batch['status_code'])?><?php if($batch['error_message']):?><span class="cell-sub"><?=e($batch['error_message'])?></span><?php endif;?></td>
         <td data-label="Rreshta" class="num"><?=(int)$batch['total_rows']?></td>
         <td data-label="Aplikuar" class="num"><?=(int)$batch['applied_rows']?></td>
@@ -68,4 +68,20 @@
     <?php endforeach;?></tbody>
   </table></div>
   <?php endif;?>
+</section>
+<section class="card card--danger" id="pastro" aria-labelledby="clear-title">
+  <h2 id="clear-title">Pastro të hyrat</h2>
+  <p>Aktualisht: <strong><?=number_format($totals['payments'],0,',','.')?> pagesa</strong> të vlefshme, gjithsej <strong><?=e(money($totals['amount']))?></strong>, nga <?=number_format($totals['imports'],0,',','.')?> raporte të importuara dhe regjistrime manuale.</p>
+  <details class="disclosure"><summary>Fshi të gjitha pagesat…</summary>
+    <ul class="small">
+      <li>Fshihen <strong>të gjitha</strong> pagesat, të importuara dhe manuale, edhe ato të stornuara. Të gjitha faturat bëhen përsëri të papaguara.</li>
+      <li>Raportet e importuara ruhen. Pastaj mund t’i rindërtoni të hyrat <strong>vetëm nga një raport</strong>: hapni raportin dhe zgjidhni “Rindërto të hyrat vetëm nga ky raport”.</li>
+      <li>Në historikun e çdo fature shënohet fshirja, me komentin tuaj.</li>
+    </ul>
+    <form method="post" action="<?=e(app_url('/admin/finance/clear-payments.php'))?>" class="form-grid"><?=csrf_field()?>
+      <label class="field">Komenti (i detyrueshëm)<textarea name="comment" maxlength="1000" required placeholder="P.sh. Raportet ditore u importuan dy herë; rindërtim nga raporti kumulativ."></textarea></label>
+      <label class="field"><span>Shkruani <strong>FSHI</strong> për të konfirmuar</span><input name="confirm" required autocomplete="off" pattern="[Ff][Ss][Hh][Ii]"></label>
+      <div class="form-actions"><button class="btn--danger">Fshi të gjitha pagesat</button></div>
+    </form>
+  </details>
 </section>
