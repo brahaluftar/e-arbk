@@ -26,6 +26,7 @@ $isAdmin=$role==='ADMIN';$isEditor=in_array($role,Auth::EDITOR_ROLES,true);
   <?php if($isAdmin):?>
   <div class="nav-group"><button type="button" class="nav-group-title"<?=nav_current('/admin/finance')?>>Financat</button><div class="nav-menu">
     <a class="nav-link" href="<?=e(app_url('/admin/finance/index.php'))?>"<?=nav_current('/admin/finance/index')?>>Përmbledhje</a>
+    <a class="nav-link" href="<?=e(app_url('/admin/finance/revenue.php'))?>"<?=nav_current('/admin/finance/revenue')?>>Të hyrat</a>
     <a class="nav-link" href="<?=e(app_url('/admin/finance/annual.php'))?>"<?=nav_current('/admin/finance/annual')?>>Faturimi vjetor</a>
     <a class="nav-link" href="<?=e(app_url('/admin/finance/invoices.php'))?>"<?=nav_current('/admin/finance/invoice')?>>Faturat</a>
     <a class="nav-link" href="<?=e(app_url('/admin/finance/payments.php'))?>"<?=nav_current('/admin/finance/payment')?>>Pagesat</a>

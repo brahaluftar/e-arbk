@@ -51,6 +51,17 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 - The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
 - **Missing email/municipality settings no longer stop the application.** `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MUNICIPALITY_NAME`, `MUNICIPALITY_ADDRESS`, `MUNICIPALITY_CONTACT` and `MUNICIPAL_BANK_ACCOUNT` are now warnings: they are shown by the preflight, the deploy and the admin dashboard. Until they are set, emails are not sent and invoices print those fields blank. The security checks (HTTPS, APP_KEY, database encryption, debug off) still stop the application.
 
+## Revenue drill-down (November 2026)
+
+**Financat → Të hyrat** (`/admin/finance/revenue.php`) shows the year's revenue at any level of detail.
+
+- **By NACE activity:** sector (NACE section A–U) → division → NACE code → the code's invoices, and the businesses and units not yet (fully) invoiced. Each level shows the estimate, invoiced, to be invoiced, paid with % collected, and outstanding.
+- **By month:** invoiced and collected per month → that month's payments (from the Finance Directorate report or manual) and the invoices issued.
+- **Links:** every invoice and business links to its own page.
+- **Export:** every level downloads as Excel with all rows.
+- **Dashboard:** the summary cards and the monthly chart bars now open the matching level.
+- **Totals:** the totals equal the dashboard figures at every level. This was checked on SQL Server with active, discounted, closed and later-registered businesses, units, a cancelled invoice, a reversed payment and a manual invoice.
+
 ## Bug fixes
 
 | Bug | Fix |

@@ -886,6 +886,17 @@ Legend: **A** ADMIN, **O** OFFICIAL, **R** READ_ONLY, **B** BUSINESS, **P** publ
 | `/admin/permits/revoke.php` | POST (A, O) | Revoke a permit with a reason |
 | `/admin/permits/pdf.php?id=` | GET (staff) | Download an issued permit |
 | `/admin/imports/retry.php` | POST | Re-queue a failed import |
+| `/admin/finance/revenue.php` | GET | Revenue drill-down (November 2026): `year`, then `section` → `division` → `nace` (`-` = no code), or `view=months` → `month`; `export=1[&sheet=1]` downloads the current level as XLSX |
+
+**Revenue drill-down** (`RevenueRepository`, `App\Support\NaceSections`):
+
+- **By activity:** NACE Rev. 2 section (A–U, from the first two digits of the code) → division → NACE code. The code page lists the code's invoices and the businesses/units whose estimate is not fully invoiced yet.
+- **Codes:** invoices are grouped by `registered_nace_code_snapshot` and estimates by the ARBK/unit NACE code, normalised without dots or spaces. Codes that cannot be mapped fall under "Pa kod NACE".
+- **Columns:** estimate (same rule as the dashboard), invoiced (not cancelled), to be invoiced (per business or unit against its own invoices of the year), paid on the year's invoices, outstanding.
+- **Totals:** at every level the totals equal the dashboard's estimated income, invoiced, to be invoiced and still to be paid.
+- **By month:** invoices of the fiscal year by issue month, and payments by payment date with reversals excluded, as in the dashboard chart. A month lists its payments (with source: Finance Directorate report or manual) and its invoices.
+- **Lists and export:** lists show at most 200 rows; the Excel export always contains everything.
+- **Entry points:** the dashboard summary cards, the chart bars, the month list and **Financat → Të hyrat** link here.
 
 Removed: `/admin/finance/generate-unit-invoices.php` (units are part of the annual job). `/admin/businesses/classification.php` now redirects to the register with the "Pa klasifikim" tab.
 
