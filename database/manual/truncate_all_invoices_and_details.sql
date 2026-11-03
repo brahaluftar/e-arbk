@@ -1,9 +1,12 @@
 /*
-  DESTRUCTIVE RESET: removes every invoice and its operational details.
-  Preserves businesses, users, classifications and work permits.
-  Stop bin/process-annual-invoices.php before running this script.
-  Physical files under var/documents/invoices and var/documents/job-exports
-  are not accessible to SQL Server and must be removed separately.
+  DESTRUCTIVE RESET: removes every invoice and everything that depends on it, so invoicing can start again:
+  invoices, invoice history, payments (and storno), Finance Directorate payment imports, appeals,
+  annual invoice jobs, invoice emails, invoice audit rows and the UNIREF sequences (UNIREFs start at 000001 again).
+  Preserves businesses, units, users, classifications, business imports and work permits.
+
+  Easiest from the server (also removes the old PDF/XLSX export files):
+      php bin/reset-invoices.php --confirm
+  Stop the annual-invoice cron job (bin/process-annual-invoices.php) before running it.
 */
 SET XACT_ABORT ON;
 SET NOCOUNT ON;
@@ -11,59 +14,38 @@ SET NOCOUNT ON;
 BEGIN TRY
     BEGIN TRANSACTION;
 
-    /* Email tracking whose logical entity is an invoice. */
-    DELETE e
-    FROM dbo.message_events e
-    JOIN dbo.outbound_messages m ON m.id=e.message_id
-    WHERE m.related_entity_type='INVOICE';
+    /* Invoice emails and their tracking links. */
+    DELETE e FROM dbo.message_events e JOIN dbo.outbound_messages m ON m.id=e.message_id WHERE m.related_entity_type='INVOICE';
+    DELETE l FROM dbo.message_action_links l JOIN dbo.outbound_messages m ON m.id=l.message_id WHERE m.related_entity_type='INVOICE';
+    DELETE FROM dbo.outbound_messages WHERE related_entity_type='INVOICE';
 
-    DELETE l
-    FROM dbo.message_action_links l
-    JOIN dbo.outbound_messages m ON m.id=l.message_id
-    WHERE m.related_entity_type='INVOICE';
-
-    DELETE FROM dbo.outbound_messages
-    WHERE related_entity_type='INVOICE';
-
-    /* Generic audit rows do not have foreign keys and are reset selectively. */
+    /* Audit rows have no foreign keys; only the invoicing ones are removed. */
     DELETE FROM dbo.audit_log
-    WHERE entity_type IN('BUSINESS_INVOICE','INVOICE_APPEAL','ANNUAL_INVOICE_JOB')
-       OR action_code IN('ANNUAL_INVOICE_CREATED','ANNUAL_INVOICE_JOB_QUEUED','INVOICE_APPEAL_SUBMITTED','INVOICE_APPEAL_STATUS_CHANGED');
+    WHERE entity_type IN('BUSINESS_INVOICE','INVOICE_PAYMENT','INVOICE_APPEAL','ANNUAL_INVOICE_JOB','PAYMENT_IMPORT_BATCH');
 
-    /* SQL Server blocks TRUNCATE of a referenced parent even when children are empty. */
-    ALTER TABLE dbo.invoice_appeal_events DROP CONSTRAINT FK_invoice_appeal_events_appeal;
-    ALTER TABLE dbo.invoice_appeals DROP CONSTRAINT FK_invoice_appeals_invoice;
-    ALTER TABLE dbo.business_invoice_payments DROP CONSTRAINT FK_business_invoice_payments_invoice;
-    ALTER TABLE dbo.annual_invoice_job_items DROP CONSTRAINT FK_annual_invoice_job_items_invoice;
-    ALTER TABLE dbo.annual_invoice_job_items DROP CONSTRAINT FK_annual_invoice_job_items_job;
+    DELETE FROM dbo.invoice_appeal_events;
+    DELETE FROM dbo.invoice_appeals;
 
-    TRUNCATE TABLE dbo.invoice_appeal_events;
-    TRUNCATE TABLE dbo.invoice_appeals;
-    TRUNCATE TABLE dbo.business_invoice_payments;
-    TRUNCATE TABLE dbo.annual_invoice_job_items;
-    TRUNCATE TABLE dbo.annual_invoice_jobs;
-    TRUNCATE TABLE dbo.business_invoices;
-    TRUNCATE TABLE dbo.invoice_uniref_sequences;
+    /* Payments and import rows point at each other. */
+    UPDATE dbo.business_invoice_payments SET import_row_id=NULL WHERE import_row_id IS NOT NULL;
+    DELETE FROM dbo.payment_import_rows;
+    DELETE FROM dbo.payment_import_batches;
+    DELETE FROM dbo.business_invoice_payments;
 
-    ALTER TABLE dbo.invoice_appeal_events WITH CHECK
-      ADD CONSTRAINT FK_invoice_appeal_events_appeal
-      FOREIGN KEY(appeal_id) REFERENCES dbo.invoice_appeals(id);
+    DELETE FROM dbo.business_invoice_events;
+    DELETE FROM dbo.annual_invoice_job_items;
+    DELETE FROM dbo.annual_invoice_jobs;
+    DELETE FROM dbo.business_invoices;
+    DELETE FROM dbo.invoice_uniref_sequences;
 
-    ALTER TABLE dbo.invoice_appeals WITH CHECK
-      ADD CONSTRAINT FK_invoice_appeals_invoice
-      FOREIGN KEY(invoice_id) REFERENCES dbo.business_invoices(id);
-
-    ALTER TABLE dbo.business_invoice_payments WITH CHECK
-      ADD CONSTRAINT FK_business_invoice_payments_invoice
-      FOREIGN KEY(invoice_id) REFERENCES dbo.business_invoices(id);
-
-    ALTER TABLE dbo.annual_invoice_job_items WITH CHECK
-      ADD CONSTRAINT FK_annual_invoice_job_items_invoice
-      FOREIGN KEY(invoice_id) REFERENCES dbo.business_invoices(id);
-
-    ALTER TABLE dbo.annual_invoice_job_items WITH CHECK
-      ADD CONSTRAINT FK_annual_invoice_job_items_job
-      FOREIGN KEY(job_id) REFERENCES dbo.annual_invoice_jobs(id);
+    /* New rows start again at id 1. A table that never had a row is skipped: reseeding it to 0 would make 0 its first id. */
+    DECLARE @reseed nvarchar(max)=N'';
+    SELECT @reseed+=N'DBCC CHECKIDENT(''dbo.'+t.name+N''', RESEED, 0) WITH NO_INFOMSGS;'
+    FROM sys.identity_columns c JOIN sys.tables t ON t.object_id=c.object_id
+    WHERE t.schema_id=SCHEMA_ID('dbo') AND c.last_value IS NOT NULL
+      AND t.name IN('invoice_appeal_events','invoice_appeals','payment_import_rows','payment_import_batches','business_invoice_payments',
+                    'business_invoice_events','annual_invoice_job_items','annual_invoice_jobs','business_invoices');
+    EXEC sys.sp_executesql @reseed;
 
     COMMIT TRANSACTION;
 
@@ -71,6 +53,9 @@ BEGIN TRY
     FROM (VALUES
       ('business_invoices',(SELECT COUNT_BIG(*) FROM dbo.business_invoices)),
       ('business_invoice_payments',(SELECT COUNT_BIG(*) FROM dbo.business_invoice_payments)),
+      ('business_invoice_events',(SELECT COUNT_BIG(*) FROM dbo.business_invoice_events)),
+      ('payment_import_batches',(SELECT COUNT_BIG(*) FROM dbo.payment_import_batches)),
+      ('payment_import_rows',(SELECT COUNT_BIG(*) FROM dbo.payment_import_rows)),
       ('invoice_appeals',(SELECT COUNT_BIG(*) FROM dbo.invoice_appeals)),
       ('invoice_appeal_events',(SELECT COUNT_BIG(*) FROM dbo.invoice_appeal_events)),
       ('annual_invoice_jobs',(SELECT COUNT_BIG(*) FROM dbo.annual_invoice_jobs)),

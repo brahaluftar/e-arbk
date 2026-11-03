@@ -1029,6 +1029,7 @@ Single sheet with a frozen header row and an autofilter. The header uses a bold 
 | `php bin/sync-atk.php` | ATK status sync | none | — |
 | `php bin/sync-tariff-mappings.php` | Fill the tariff relation | none | — |
 | `php bin/fix-uniref-check-characters.php` | Check the check character of every invoice UNIREF (`dbo.usp_fix_uniref_check_characters`) | `--apply` corrects the wrong ones | exception = non-zero |
+| `php bin/reset-invoices.php --confirm` | DESTRUCTIVE: delete every invoice with its payments, payment imports, history, appeals, annual jobs and invoice emails; reset the UNIREF sequences and remove the export files (`database/manual/truncate_all_invoices_and_details.sql`) | `--confirm` is required | exception = non-zero |
 | `php bin/classify-nace.php` | AUTO classification | none | — |
 | `php bin/process-imports.php` | Drain the import queue | CLI | — |
 | `php bin/process-annual-invoices.php [batch]` | Drain annual jobs + build exports | CLI | — |
