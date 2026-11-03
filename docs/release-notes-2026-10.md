@@ -49,6 +49,7 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 - **Deploy checks the PHP version.** `deploy-from-github.sh` now lints every PHP file with the server's PHP before migrating or switching. A release that does not run there is stopped and the live site stays as it was.
 - **Reset all invoices.** `php bin/reset-invoices.php --confirm` deletes every invoice and everything that depends on it: payments, payment imports, history, appeals, annual jobs and invoice emails. It resets the UNIREF sequences and removes the old PDF/XLSX exports, and new invoices start again at id 1 and UNIREF 000001. Businesses, units, users, classifications and work permits stay. The same SQL is in `database/manual/truncate_all_invoices_and_details.sql` for SQL Server Management Studio.
 - The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
+- **Missing email/municipality settings no longer stop the application.** `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MUNICIPALITY_NAME`, `MUNICIPALITY_ADDRESS`, `MUNICIPALITY_CONTACT` and `MUNICIPAL_BANK_ACCOUNT` are now warnings: they are shown by the preflight, the deploy and the admin dashboard. Until they are set, emails are not sent and invoices print those fields blank. The security checks (HTTPS, APP_KEY, database encryption, debug off) still stop the application.
 
 ## Bug fixes
 

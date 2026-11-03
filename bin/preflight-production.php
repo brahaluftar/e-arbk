@@ -27,6 +27,7 @@ try {
     foreach(glob($root.'/database/migrations/*.sql')?:[] as $file) if(!in_array(basename($file),$applied,true))$errors[]='Pending migration: '.basename($file);
 } catch(Throwable $e){$errors[]='Database check failed: '.$e->getMessage();}
 unset($pdo);
+foreach(ProductionValidator::warnings($config) as $warning)fwrite(STDERR,"WARNING: $warning\n");
 if($errors!==[]){foreach($errors as $error)fwrite(STDERR,"FAIL: $error\n");exit(1);}
 $completionFile=getenv('ARBK_COMPLETION_FILE');
 if($completionFile!==false&&$completionFile!==''){

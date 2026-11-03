@@ -40,14 +40,29 @@ final class ProductionValidatorTest extends TestCase
     {
         $config = Config::load(sys_get_temp_dir() . '/arbk-production-' . bin2hex(random_bytes(8)), $this->validProductionValues());
         self::assertSame([], ProductionValidator::errors($config));
+        self::assertSame([], ProductionValidator::warnings($config));
     }
 
-    public function testRejectsMissingGraphSecret(): void
+    public function testMissingGraphSecretIsOnlyAWarning(): void
     {
         $values = $this->validProductionValues();
         $values['GRAPH_CLIENT_SECRET'] = 'REPLACE_WITH_MICROSOFT_ENTRA_CLIENT_SECRET';
         $config = Config::load(sys_get_temp_dir() . '/arbk-production-' . bin2hex(random_bytes(8)), $values);
-        self::assertContains('GRAPH_CLIENT_SECRET is required for password reset email.', ProductionValidator::errors($config));
+        self::assertSame([], ProductionValidator::errors($config));
+        self::assertContains('GRAPH_CLIENT_SECRET is not set: password reset and invoice emails cannot be sent.', ProductionValidator::warnings($config));
+    }
+
+    public function testMissingDocumentSettingsAreWarningsNotErrors(): void
+    {
+        $values = $this->validProductionValues();
+        $values['MUNICIPALITY_ADDRESS'] = '';
+        $values['MUNICIPAL_BANK_ACCOUNT'] = 'PENDING';
+        $config = Config::load(sys_get_temp_dir() . '/arbk-production-' . bin2hex(random_bytes(8)), $values);
+        self::assertSame([], ProductionValidator::errors($config));
+        self::assertSame([
+            'MUNICIPALITY_ADDRESS is not set: invoices and permits print it blank.',
+            'MUNICIPAL_BANK_ACCOUNT is not set: invoices and permits print it blank.',
+        ], ProductionValidator::warnings($config));
     }
 
     public function testRejectsUntrustedGraphHost(): void

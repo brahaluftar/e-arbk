@@ -14,8 +14,6 @@ final class ProductionValidator
         if (strlen($config->string('APP_KEY'))<32 || str_starts_with($config->string('APP_KEY'),'REPLACE_')) $errors[]='APP_KEY must be a unique secret of at least 32 characters.';
         if ($config->bool('DB_TRUSTED_CONNECTION')) $errors[]='DB_TRUSTED_CONNECTION must be false on CloudClusters.';
         foreach(['DB_HOST','DB_NAME','DB_USER','DB_PASSWORD'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required.";
-        foreach(['GRAPH_TENANT_ID','GRAPH_CLIENT_ID','GRAPH_CLIENT_SECRET'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required for password reset email.";
-        foreach(['MUNICIPALITY_NAME','MUNICIPALITY_ADDRESS','MUNICIPALITY_CONTACT','MUNICIPAL_BANK_ACCOUNT'] as $key) if ($config->string($key)==='' || str_starts_with($config->string($key),'REPLACE_')) $errors[]="$key is required for invoice and permit documents.";
         if (filter_var($config->string('GRAPH_SENDER_MAILBOX'),FILTER_VALIDATE_EMAIL)===false) $errors[]='GRAPH_SENDER_MAILBOX must be a valid email address.';
         if (parse_url($config->string('GRAPH_BASE_URL'),PHP_URL_SCHEME)!=='https' || strtolower((string)parse_url($config->string('GRAPH_BASE_URL'),PHP_URL_HOST))!=='graph.microsoft.com') $errors[]='GRAPH_BASE_URL must use https://graph.microsoft.com.';
         if ($config->int('GRAPH_TIMEOUT_SECONDS')<1 || $config->int('GRAPH_TIMEOUT_SECONDS')>60) $errors[]='GRAPH_TIMEOUT_SECONDS must be between 1 and 60.';
@@ -26,6 +24,26 @@ final class ProductionValidator
         if ($config->string('BACKUP_MODE')==='sqlserver' && $config->string('DB_BACKUP_PATH')==='') $errors[]='DB_BACKUP_PATH is required for sqlserver backup mode.';
         if (!in_array($config->string('BACKUP_MODE'),['managed','sqlserver'],true)) $errors[]='BACKUP_MODE must be managed or sqlserver.';
         return $errors;
+    }
+
+    /**
+     * Settings that do not affect security: the application runs without them, but email delivery fails
+     * and invoices/permits print blank fields until they are filled in. Reported by the preflight and the dashboard.
+     * @return list<string>
+     */
+    public static function warnings(Config $config): array
+    {
+        if ($config->string('APP_ENV') !== 'production') return [];
+        $warnings=[];
+        foreach(['GRAPH_TENANT_ID','GRAPH_CLIENT_ID','GRAPH_CLIENT_SECRET'] as $key) if (self::missing($config,$key)) $warnings[]="$key is not set: password reset and invoice emails cannot be sent.";
+        foreach(['MUNICIPALITY_NAME','MUNICIPALITY_ADDRESS','MUNICIPALITY_CONTACT','MUNICIPAL_BANK_ACCOUNT'] as $key) if (self::missing($config,$key)) $warnings[]="$key is not set: invoices and permits print it blank.";
+        return $warnings;
+    }
+
+    private static function missing(Config $config,string $key): bool
+    {
+        $value=$config->string($key);
+        return $value==='' || str_starts_with($value,'REPLACE_') || strtoupper($value)==='PENDING';
     }
 
     public static function enforce(Config $config): void
