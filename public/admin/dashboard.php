@@ -7,4 +7,6 @@ $stats=$repository->dashboard();
 $year=filter_var($_GET['year']??date('Y'),FILTER_VALIDATE_INT);
 if($year===false||$year<2000||$year>2100)$year=(int)date('Y');
 $financialStats=$user['role_code']==='ADMIN'?$repository->financialDashboard($year,App\Billing\BillingPolicy::fromConfig($app['config'])):null;
-render('admin/dashboard','Paneli',compact('stats','financialStats'));
+// Settings missing from the server .env: the first word of each warning is the key.
+$missingSettings=$user['role_code']==='ADMIN'?array_map(static fn(string $w): string => strtok($w,' '),App\Support\ProductionValidator::warnings($app['config'])):[];
+render('admin/dashboard','Paneli',compact('stats','financialStats','missingSettings'));

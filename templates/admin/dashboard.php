@@ -1,5 +1,6 @@
 <?php $list=static fn(array $query): string => app_url('/admin/businesses/index.php'.($query===[]?'':'?'.http_build_query($query)));?>
 <div class="page-head"><div><h1>Paneli</h1><p>Gjendja e regjistrit të bizneseve dhe e klasifikimit NACE.</p></div></div>
+<?php if(!empty($missingSettings)):?><div class="flash flash--error" role="alert">Mungojnë cilësimet në skedarin .env të serverit: <strong><?=e(implode(', ',$missingSettings))?></strong>. Faturat dhe lejet i shtypin këto fusha bosh, dhe email-et nuk dërgohen pa cilësimet GRAPH_.</div><?php endif;?>
 <section class="kpis" aria-label="Treguesit kryesorë">
   <a class="kpi" href="<?=e($list([]))?>"><strong><?=number_format((int)($stats['total']??0),0,',','.')?></strong><span>Biznese gjithsej</span></a>
   <a class="kpi kpi--success" href="<?=e($list(['atk_status'=>'ACTIVE']))?>"><strong><?=number_format((int)($stats['active']??0),0,',','.')?></strong><span>Aktive</span></a>

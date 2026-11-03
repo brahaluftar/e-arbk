@@ -10,6 +10,7 @@ try {
     if ($config->string('APP_URL')!=='https://arbk.kryeqyteti.net') $errors[]='APP_URL must be https://arbk.kryeqyteti.net.';
     foreach(['pdo_sqlsrv','mbstring','openssl','zip','xmlreader','xmlwriter','simplexml','zlib','gd'] as $extension) if(!extension_loaded($extension)) $errors[]='Missing extension: '.$extension;
     if(PHP_VERSION_ID<80100) $errors[]='PHP 8.1+ is required.';
+    foreach(App\Support\ProductionValidator::warnings($config) as $warning) fwrite(STDERR,'WARNING: '.$warning."\n");
     if($errors!==[]) throw new RuntimeException(implode("\n",$errors));
     echo "Production environment and CLI extensions validated.\n";
 } catch(Throwable $e) {fwrite(STDERR,$e->getMessage()."\n");exit(1);}
