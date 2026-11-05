@@ -46,5 +46,15 @@ return [
     'MUNICIPALITY_ADDRESS' => '',
     'MUNICIPALITY_CONTACT' => '',
     'MUNICIPAL_BANK_ACCOUNT' => '',
-    'INVOICE_LEGAL_TEXT' => 'Kjo faturë është lëshuar nga sistemi komunal për tarifën vjetore të ushtrimit të veprimtarisë. Pagesa realizohet duke përdorur UNIREF-in e paraqitur në faturë.',
+    // Invoice texts (see docs/invoice-texts.md). Empty = the built-in text of InvoiceTranslations; each key also
+    // accepts _EN and _SR variants for English and Serbian invoices.
+    'INVOICE_ISSUER' => '',
+    'INVOICE_TAX_LABEL' => '',
+    'INVOICE_TAX_LABEL_PROFESSIONAL' => '',
+    // NACE codes (or their first digits) billed as professional services; empty = one label for every business.
+    'INVOICE_PROFESSIONAL_NACE' => '69,70,71,72,73,74,75',
+    'INVOICE_LEGAL_BASIS' => '',
+    'INVOICE_PAYMENT_TERMS' => '',
+    'INVOICE_WARNING' => '',
+    'INVOICE_LEGAL_TEXT' => '',
 ];

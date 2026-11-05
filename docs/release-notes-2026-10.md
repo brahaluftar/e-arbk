@@ -51,6 +51,29 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 - The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
 - **Missing email/municipality settings no longer stop the application.** `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MUNICIPALITY_NAME`, `MUNICIPALITY_ADDRESS`, `MUNICIPALITY_CONTACT` and `MUNICIPAL_BANK_ACCOUNT` are now warnings: they are shown by the preflight, the deploy and the admin dashboard. Until they are set, emails are not sent and invoices print those fields blank. The security checks (HTTPS, APP_KEY, database encryption, debug off) still stop the application.
 
+## Invoice redesign (November 2026)
+
+The invoice follows the recommendations for the business tax invoice. Migration `0029_client_and_invoice_numbers.sql`. The full list of texts and where to change them is in **docs/invoice-texts.md**.
+
+1. **Header:** no UNIREF; shows "FATURA", the fiscal year and the issuing directorate.
+2. **Taxpayer:** shows the **client number** (Nr. i klientit).
+   - Every business has a unique one: existing businesses are numbered from 100001, and new ones are numbered automatically.
+   - Staff can edit it on the business page, and it is searchable in the business register and the invoice list.
+3. **Details:** show the **invoice number** instead of the UNIREF.
+   - Format `2026-000001` per fiscal year.
+   - Existing system-numbered invoices are renumbered, and the old number is kept in the invoice history.
+4. **Tax line:** "Taksa për ushtrimin e veprimtarisë", or "Taksa për leje për shërbime profesionale" for the NACE codes in `INVOICE_PROFESSIONAL_NACE` (section M by default). A single general name is also possible.
+   - The amounts are **Taksa për vitin YYYY**, **Borxhi paraprak** and **TOTALI** (plus "Paguar" when there are payments).
+   - The UNIREF is framed and printed large next to the barcode.
+5. **Footer:** adds the **legal basis**, "**Afati i pagesës: 30 ditë nga momenti i pranimit të faturës.**" and the warning "**VËREJTJE: Në rast të mospagesës mjetet do të realizohen përmes urdhërit përmbarimor.**"
+   - English and Serbian versions are included.
+   - Every text can be changed from `/cloudclusters/arbk-env/.env` without a deploy.
+
+**Rework of existing invoices:**
+- Single invoices are rendered on demand, so every invoice shows the new design.
+- The annual-job bulk exports are queued for rebuild.
+- The client number also appears in the unpaid-obligations Excel.
+
 ## Clear the revenue and rebuild it from one report (November 2026)
 
 Migration `0028_payment_clear_and_restore.sql`.

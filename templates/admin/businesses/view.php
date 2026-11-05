@@ -5,14 +5,14 @@ $state=$business['assignment_method']??null;
 ?>
 <p class="crumbs"><a href="<?=e(app_url($returnPath))?>">← Regjistri i bizneseve</a></p>
 <div class="page-head">
-  <div><h1><?=e($business['Emri'])?></h1><p>NRB <?=e($business['NRBIZ'])?> · ID <?=$id?> · <?=badge('status',$business['normalized_atk_status'])?></p></div>
+  <div><h1><?=e($business['Emri'])?></h1><p>NRB <?=e($business['NRBIZ'])?> · Nr. i klientit <?=e($business['client_number']??'—')?> · ID <?=$id?> · <?=badge('status',$business['normalized_atk_status'])?></p></div>
 </div>
 <nav class="section-nav" aria-label="Seksionet"><a href="#te-dhenat">Të dhënat</a><a href="#njesite">Njësitë (<?=count($units)?>)</a><a href="#klasifikimi">Klasifikimi</a><a href="#faturat">Faturat (<?=count($invoices)?>)</a><a href="#lejet">Lejet (<?=count($permits)?>)</a></nav>
 
 <section class="card" id="te-dhenat">
   <div class="card-head"><h2>Të dhënat e biznesit</h2><?php if($debt>0):?><span class="badge badge--danger">Borxh: <?=e(money($debt))?></span><?php else:?><span class="badge badge--success">Pa borxh</span><?php endif;?></div>
   <dl class="dl-grid">
-    <?php foreach(['NUMRI_FISKAL'=>'Numri fiskal','ADRESA'=>'Adresa','EMAIL'=>'Emaili','NUMRI_TELEFONIT'=>'Telefoni','MENAXHERI'=>'Menaxheri','NACE_CODE_REG'=>'Kodi NACE','NACEPERSHKRIMI'=>'Veprimtaria NACE','Statusi'=>'Statusi ARBK','NR_PUNETOREVE'=>'Numri i punëtorëve','TOTAL_M'=>'Gjithsej meshkuj','TOTAL_F'=>'Gjithsej femra','pronesia_grua'=>'Pronësia e gruas (%)','perqindja_veteran'=>'Pronësia e veteranit (%)'] as $key=>$label):?>
+    <?php foreach(['client_number'=>'Nr. i klientit','NUMRI_FISKAL'=>'Numri fiskal','ADRESA'=>'Adresa','EMAIL'=>'Emaili','NUMRI_TELEFONIT'=>'Telefoni','MENAXHERI'=>'Menaxheri','NACE_CODE_REG'=>'Kodi NACE','NACEPERSHKRIMI'=>'Veprimtaria NACE','Statusi'=>'Statusi ARBK','NR_PUNETOREVE'=>'Numri i punëtorëve','TOTAL_M'=>'Gjithsej meshkuj','TOTAL_F'=>'Gjithsej femra','pronesia_grua'=>'Pronësia e gruas (%)','perqindja_veteran'=>'Pronësia e veteranit (%)'] as $key=>$label):?>
       <div><dt><?=e($label)?></dt><dd><?=e(($business[$key]??'')===''||$business[$key]===null?'—':$business[$key])?></dd></div>
     <?php endforeach;?>
     <?php foreach(['Pasiv'=>'Pasiv','ATK_MBYLLUR'=>'ATK mbyllur','pronare_grua'=>'Pronare grua','pronar_veteran'=>'Pronar veteran'] as $key=>$label):?><div><dt><?=e($label)?></dt><dd><?=e($flag($business[$key]??null))?></dd></div><?php endforeach;?>
@@ -22,6 +22,7 @@ $state=$business['assignment_method']??null;
   <details class="disclosure"><summary>Edito të dhënat</summary>
     <form method="post" action="<?=e(app_url('/admin/businesses/update.php'))?>"><?=csrf_field()?><input type="hidden" name="business_id" value="<?=$id?>"><input type="hidden" name="return" value="<?=e($returnQuery)?>">
       <div class="form-grid">
+        <label class="field">Nr. i klientit<small>Unik për çdo biznes; shtypet në faturë.</small><input name="client_number" maxlength="20" required pattern="[0-9A-Za-z][0-9A-Za-z-]{0,19}" value="<?=e($business['client_number']??'')?>"></label>
         <?php foreach(['NUMRI_FISKAL'=>['Numri fiskal',30],'ADRESA'=>['Adresa',500],'EMAIL'=>['Emaili',254],'NUMRI_TELEFONIT'=>['Telefoni',50],'MENAXHERI'=>['Menaxheri',255]] as $field=>[$label,$max]):?><label class="field"><?=e($label)?><input name="<?=e($field)?>" maxlength="<?=$max?>" value="<?=e($business[$field]??'')?>"<?=$field==='EMAIL'?' type="email"':''?>></label><?php endforeach;?>
         <?php foreach(['NR_PUNETOREVE'=>'Numri i punëtorëve','TOTAL_M'=>'Gjithsej meshkuj','TOTAL_F'=>'Gjithsej femra'] as $field=>$label):?><label class="field"><?=e($label)?><input type="number" min="0" name="<?=e($field)?>" value="<?=e($business[$field]??'')?>"></label><?php endforeach;?>
         <?php foreach(['Pasiv'=>'Pasiv','ATK_MBYLLUR'=>'ATK mbyllur','pronare_grua'=>'Pronare grua','pronar_veteran'=>'Pronar veteran'] as $field=>$label):?><label class="field"><?=e($label)?><select name="<?=e($field)?>"><option value="">—</option><option value="1" <?=isset($business[$field])&&(int)$business[$field]===1?'selected':''?>>Po</option><option value="0" <?=isset($business[$field])&&(int)$business[$field]===0?'selected':''?>>Jo</option></select></label><?php endforeach;?>

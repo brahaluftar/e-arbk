@@ -1,7 +1,8 @@
 /*
   DESTRUCTIVE RESET: removes every invoice and everything that depends on it, so invoicing can start again:
   invoices, invoice history, payments (and storno), Finance Directorate payment imports, appeals,
-  annual invoice jobs, invoice emails, invoice audit rows and the UNIREF sequences (UNIREFs start at 000001 again).
+  annual invoice jobs, invoice emails, invoice audit rows, the UNIREF sequences and the invoice-number sequences
+  (UNIREFs and invoice numbers start at 000001 again).
   Preserves businesses, units, users, classifications, business imports and work permits.
 
   Easiest from the server (also removes the old PDF/XLSX export files):
@@ -37,6 +38,7 @@ BEGIN TRY
     DELETE FROM dbo.annual_invoice_jobs;
     DELETE FROM dbo.business_invoices;
     DELETE FROM dbo.invoice_uniref_sequences;
+    DELETE FROM dbo.invoice_number_sequences;
 
     /* New rows start again at id 1. A table that never had a row is skipped: reseeding it to 0 would make 0 its first id. */
     DECLARE @reseed nvarchar(max)=N'';
@@ -60,7 +62,8 @@ BEGIN TRY
       ('invoice_appeal_events',(SELECT COUNT_BIG(*) FROM dbo.invoice_appeal_events)),
       ('annual_invoice_jobs',(SELECT COUNT_BIG(*) FROM dbo.annual_invoice_jobs)),
       ('annual_invoice_job_items',(SELECT COUNT_BIG(*) FROM dbo.annual_invoice_job_items)),
-      ('invoice_uniref_sequences',(SELECT COUNT_BIG(*) FROM dbo.invoice_uniref_sequences))
+      ('invoice_uniref_sequences',(SELECT COUNT_BIG(*) FROM dbo.invoice_uniref_sequences)),
+      ('invoice_number_sequences',(SELECT COUNT_BIG(*) FROM dbo.invoice_number_sequences))
     ) result(table_name,row_count);
 END TRY
 BEGIN CATCH

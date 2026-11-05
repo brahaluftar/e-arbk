@@ -9,7 +9,7 @@ $activeFilters=count(array_filter(['q'=>$query,'status'=>$status,'job'=>$jobId])
   <?=filter_toggle($activeFilters)?>
   <div class="filters-body"><form method="get" class="form-grid">
     <label class="field">Viti fiskal<input type="number" name="year" min="2000" max="2100" value="<?=$year?>"></label>
-    <label class="field">Kërko<input name="q" value="<?=e($query)?>" placeholder="UNIREF, numër, biznes, NRB"></label>
+    <label class="field">Kërko<input name="q" value="<?=e($query)?>" placeholder="Nr. i faturës, UNIREF, biznes, NRB, nr. i klientit"></label>
     <label class="field">Statusi<select name="status"><option value="">Të gjitha</option><?php foreach(App\Repository\InvoiceRepository::STATUS_FILTERS as $code):?><option value="<?=e($code)?>" <?=$status===$code?'selected':''?>><?=e(label('invoice',$code))?></option><?php endforeach;?></select></label>
     <label class="field">Rreshta<select name="per_page"><?php foreach([20,30,50,100] as $size):?><option value="<?=$size?>" <?=$result['per_page']===$size?'selected':''?>><?=$size?></option><?php endforeach;?></select></label>
     <?=hidden_fields(['job'=>$jobId])?>
