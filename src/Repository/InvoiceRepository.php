@@ -25,7 +25,7 @@ final class InvoiceRepository
     /** SELECT for rendering invoice documents; append a WHERE/ORDER BY on alias i. */
     public static function documentSelect(): string
     {
-        return 'SELECT i.*,a.EMAIL business_email,b.paid_amount,b.outstanding,b.status_code balance_status,COALESCE(d.previous_debt,0) previous_debt
+        return 'SELECT i.*,a.EMAIL business_email,a.client_number,b.paid_amount,b.outstanding,b.status_code balance_status,COALESCE(d.previous_debt,0) previous_debt
             FROM dbo.business_invoices i JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=i.business_id JOIN dbo.v_invoice_balance b ON b.invoice_id=i.id '.self::PREVIOUS_DEBT;
     }
 
@@ -46,9 +46,9 @@ final class InvoiceRepository
         $where = ['i.fiscal_year=:year'];
         $params = ['year' => $year];
         if ($query !== '') {
-            $where[] = '(i.invoice_number LIKE :search_number OR i.uniref LIKE :search_uniref OR a.Emri LIKE :search_name OR a.NRBIZ LIKE :search_registration OR i.business_name_snapshot LIKE :search_snapshot)';
+            $where[] = '(i.invoice_number LIKE :search_number OR i.uniref LIKE :search_uniref OR a.Emri LIKE :search_name OR a.NRBIZ LIKE :search_registration OR i.business_name_snapshot LIKE :search_snapshot OR a.client_number=:search_client)';
             $value = '%'.$query.'%';
-            $params += ['search_number' => $value, 'search_uniref' => $value, 'search_name' => $value, 'search_registration' => $value, 'search_snapshot' => $value];
+            $params += ['search_number' => $value, 'search_uniref' => $value, 'search_name' => $value, 'search_registration' => $value, 'search_snapshot' => $value, 'search_client' => strtoupper($query)];
         }
         if ($jobId !== null && $jobId > 0) { $where[] = 'EXISTS(SELECT 1 FROM dbo.annual_invoice_job_items ji WHERE ji.job_id=:job AND ji.invoice_id=i.id)'; $params['job'] = $jobId; }
         if ($status === 'OVERDUE') $where[] = 'b.outstanding>0 AND i.due_on<CONVERT(date,SYSDATETIME())';
@@ -138,14 +138,14 @@ final class InvoiceRepository
     public function obligations(?int $upToYear): PDOStatement
     {
         $yearSql = $upToYear === null ? '' : ' AND b.fiscal_year<=:year';
-        $statement = $this->pdo->prepare("SELECT a.REGULATION_ID business_id,a.NRBIZ registration_number,a.Emri legal_name,a.NUMRI_FISKAL fiscal_number,a.ADRESA address,a.EMAIL email,a.NUMRI_TELEFONIT phone_number,a.MENAXHERI manager_name,
+        $statement = $this->pdo->prepare("SELECT a.REGULATION_ID business_id,a.client_number,a.NRBIZ registration_number,a.Emri legal_name,a.NUMRI_FISKAL fiscal_number,a.ADRESA address,a.EMAIL email,a.NUMRI_TELEFONIT phone_number,a.MENAXHERI manager_name,
                 COUNT(*) unpaid_invoices,MIN(b.fiscal_year) first_year,MAX(b.fiscal_year) last_year,
                 SUM(b.amount) invoiced_amount,SUM(b.paid_amount) paid_amount,SUM(b.outstanding) outstanding,
                 SUM(CASE WHEN b.due_on<CONVERT(date,SYSDATETIME()) THEN b.outstanding ELSE 0 END) overdue_amount,MIN(b.due_on) oldest_due_on,
                 (SELECT MAX(p.paid_on) FROM dbo.business_invoice_payments p JOIN dbo.business_invoices inv ON inv.id=p.invoice_id WHERE inv.business_id=a.REGULATION_ID AND p.reversed_at IS NULL) last_payment_on
             FROM dbo.v_invoice_balance b JOIN dbo.ARBK_LIST a ON a.REGULATION_ID=b.business_id
             WHERE b.outstanding>0$yearSql
-            GROUP BY a.REGULATION_ID,a.NRBIZ,a.Emri,a.NUMRI_FISKAL,a.ADRESA,a.EMAIL,a.NUMRI_TELEFONIT,a.MENAXHERI
+            GROUP BY a.REGULATION_ID,a.client_number,a.NRBIZ,a.Emri,a.NUMRI_FISKAL,a.ADRESA,a.EMAIL,a.NUMRI_TELEFONIT,a.MENAXHERI
             ORDER BY SUM(b.outstanding) DESC,a.Emri");
         $statement->execute($upToYear === null ? [] : ['year' => $upToYear]);
         return $statement;

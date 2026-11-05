@@ -10,7 +10,7 @@ use Throwable;
 /** Logical, fresh-database transfer of the application's SQL Server objects. */
 final class DatabaseTransfer
 {
-    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
+    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_number_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
     /** Views recreated after the data, in dependency order. */
     public const VIEWS = ['v_business_master','v_invoice_balance','v_business_billing'];
     /** Functions and procedures recreated after the views, in dependency order (name => sys.objects type). */
@@ -34,10 +34,13 @@ final class DatabaseTransfer
                 'collation'=>(string)$pdo->query("SELECT CONVERT(varchar(128),DATABASEPROPERTYEX(DB_NAME(),'Collation'))")->fetchColumn(),
                 'excluded'=>['dbo.arbk','dbo.atk2','dbo.BizList1','legacy stored procedures','login_rate_limits rows','password_reset_tokens rows','rowversion values'],
                 'before'=>[], 'after'=>[], 'tables'=>[], 'files'=>[]];
-            $sequence=$pdo->query("SELECT CONVERT(bigint,current_value) current_value,CONVERT(bigint,increment) increment FROM sys.sequences WHERE name='arbk_regulation_id_seq' AND schema_id=SCHEMA_ID('dbo')")->fetch();
-            if (!$sequence || (int)$sequence['increment'] !== 1) throw new RuntimeException('Expected ARBK ID sequence is missing or unsupported.');
-            $next=max((int)$sequence['current_value']+1,(int)$pdo->query('SELECT ISNULL(MAX(REGULATION_ID),0)+1 FROM dbo.ARBK_LIST')->fetchColumn());
-            $manifest['before'][]='CREATE SEQUENCE dbo.arbk_regulation_id_seq AS bigint START WITH '.$next.' INCREMENT BY 1;';
+            // Sequences used by ARBK_LIST defaults, recreated before the tables at their next free value.
+            foreach (['arbk_regulation_id_seq'=>'SELECT ISNULL(MAX(REGULATION_ID),0)+1 FROM dbo.ARBK_LIST','arbk_client_number_seq'=>'SELECT ISNULL(MAX(TRY_CONVERT(bigint,client_number)),100000)+1 FROM dbo.ARBK_LIST'] as $sequenceName=>$nextSql) {
+                $sequence=$pdo->query("SELECT CONVERT(bigint,current_value) current_value,CONVERT(bigint,increment) increment FROM sys.sequences WHERE name='$sequenceName' AND schema_id=SCHEMA_ID('dbo')")->fetch();
+                if (!$sequence || (int)$sequence['increment'] !== 1) throw new RuntimeException("Expected sequence $sequenceName is missing or unsupported.");
+                $next=max((int)$sequence['current_value']+1,(int)$pdo->query($nextSql)->fetchColumn());
+                $manifest['before'][]="CREATE SEQUENCE dbo.$sequenceName AS bigint START WITH $next INCREMENT BY 1;";
+            }
             foreach (self::TABLES as $table) {
                 $metadata=$this->table($pdo,$table);
                 $manifest['before'][]=$metadata['create'];

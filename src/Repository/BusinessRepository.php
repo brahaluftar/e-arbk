@@ -148,10 +148,11 @@ final class BusinessRepository
     {
         $clauses=['1=1']; $params=[];
         if(($filters['q']??'')!==''){
-            $clauses[]='(a.Emri LIKE :q_name OR a.NRBIZ LIKE :q_registration)';
+            $clauses[]='(a.Emri LIKE :q_name OR a.NRBIZ LIKE :q_registration OR a.client_number=:q_client)';
             $query='%'.trim($filters['q']).'%';
             $params[':q_name']=$query;
             $params[':q_registration']=$query;
+            $params[':q_client']=strtoupper(trim($filters['q']));
         }
         if(($filters['nace']??'')!==''){ $clauses[]="LTRIM(RTRIM(a.NACE_CODE_REG))=:nace"; $params[':nace']=trim($filters['nace']); }
         if(($filters['atk_status']??'')!==''){ $clauses[]="b.status_code=:atk"; $params[':atk']=$filters['atk_status']; }
