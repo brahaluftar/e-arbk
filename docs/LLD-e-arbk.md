@@ -537,10 +537,11 @@ COALESCE(s.status_code, CASE WHEN a.ATK_MBYLLUR = 1 THEN 'DEACTIVATED' ELSE 'ACT
 | 0027 | uniref_check_character_procedure | Function `fn_uniref_check_character` (MOD-36 check character in T-SQL) and procedure `usp_fix_uniref_check_characters` (checks every invoice UNIREF and corrects a wrong check character) |
 | 0028 | payment_clear_and_restore | Report row status `CLEARED`, invoice event `PAYMENTS_CLEARED`, `payment_import_batches.restored_at` / `restored_by_user_id` |
 | 0029 | client_and_invoice_numbers | `ARBK_LIST.client_number` (unique, default from sequence `arbk_client_number_seq`, existing businesses numbered from 100001); `invoice_number_sequences`; system-numbered invoices renumbered `YYYY-NNNNNN` with an `EDITED` history event; annual-job exports queued for rebuild |
+| 0030 | arbk_closure_wins_over_atk | ARBK closure (`ATK_MBYLLUR`, `Pasiv`, `DATA_SHUARJES`, `Statusi='Shuar'`) decides before the ATK result in `v_business_billing` and `v_business_master`; existing `business_atk_status` rows of closed businesses set to `DEACTIVATED` (`matched_by='ARBK'`) |
 
 **Runner** (`bin/migrate.php`): creates `schema_migrations` if it is missing; runs each pending `*.sql` in name order; splits batches on lines that contain only `GO`; wraps **each file** in one transaction; records the file name.
 
-**Rules for new migrations:** next number `0030_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
+**Rules for new migrations:** next number `0031_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
 
 ---
 
