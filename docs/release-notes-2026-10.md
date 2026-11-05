@@ -69,10 +69,10 @@ The invoice follows the recommendations for the business tax invoice. Migration 
 1. **Header:** no UNIREF; shows "FATURA", the fiscal year and the issuing directorate.
 2. **Taxpayer:** shows the **client number** (Nr. i klientit).
    - Every business has a unique one: existing businesses are numbered from 100001, and new ones are numbered automatically.
-   - Staff can edit it on the business page, and it is searchable in the business register and the invoice list.
-3. **Details:** show the **invoice number** instead of the UNIREF.
-   - Format `2026-000001` per fiscal year.
-   - Existing system-numbered invoices are renumbered, and the old number is kept in the invoice history.
+   - It is assigned by the system (not editable) and searchable in the business register and the invoice list.
+3. **Details:** the label "UNIREF" becomes **"Nr. i faturës"**. The number stays the UNIREF, as before.
+   - Migration `0031_invoice_number_is_uniref_again.sql` puts the UNIREF back as the number on servers where the first version of 0029 had renumbered invoices.
+   - The legal basis cites the law as **Nr. 03/L-049**.
 4. **Tax line:** "Taksa për ushtrimin e veprimtarisë", or "Taksa për leje për shërbime profesionale" for the NACE codes in `INVOICE_PROFESSIONAL_NACE` (section M by default). A single general name is also possible.
    - The amounts are **Taksa për vitin YYYY**, **Borxhi paraprak** and **TOTALI** (plus "Paguar" when there are payments).
    - The UNIREF is framed and printed large next to the barcode.

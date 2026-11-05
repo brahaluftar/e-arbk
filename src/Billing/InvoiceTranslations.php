@@ -34,7 +34,7 @@ final class InvoiceTranslations
             'issuer' => 'Drejtoria për Zhvillim Ekonomik dhe Inovacion',
             'tax_activity' => 'Taksa për ushtrimin e veprimtarisë',
             'tax_professional' => 'Taksa për leje për shërbime profesionale',
-            'legal_basis' => 'Në pajtim me dispozitat e nenit 24, paragrafi 2 të Ligjit për Vetëqeverisje Lokale Nr. 03/L-040 të dt. 04.06.2008, nenet 10 dhe 11 të Ligjit për Financat e Pushtetit Lokal Nr. 03-L-049 të dt. 03.06.2008, Rregullorës për ndryshimin dhe plotësimin e rregullorës për tarifa, ngarkesa dhe gjoba komunale nr. 01-030/01-148721/26 të dt. 30.9.2026, Drejtoria për Zhvillim Ekonomik dhe Inovacion lëshon këtë faturë.',
+            'legal_basis' => 'Në pajtim me dispozitat e nenit 24, paragrafi 2 të Ligjit për Vetëqeverisje Lokale Nr. 03/L-040 të dt. 04.06.2008, nenet 10 dhe 11 të Ligjit për Financat e Pushtetit Lokal Nr. 03/L-049 të dt. 03.06.2008, Rregullorës për ndryshimin dhe plotësimin e rregullorës për tarifa, ngarkesa dhe gjoba komunale nr. 01-030/01-148721/26 të dt. 30.9.2026, Drejtoria për Zhvillim Ekonomik dhe Inovacion lëshon këtë faturë.',
             'payment_terms' => 'Afati i pagesës: 30 ditë nga momenti i pranimit të faturës.',
             'warning' => 'VËREJTJE: Në rast të mospagesës mjetet do të realizohen përmes urdhërit përmbarimor.',
             'legal' => 'Kjo faturë është lëshuar nga sistemi komunal i faturimit. Pagesa realizohet duke përdorur UNIREF-in e paraqitur në faturë.',

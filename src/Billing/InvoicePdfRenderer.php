@@ -59,7 +59,7 @@ final class InvoicePdfRenderer
 
         // 3. Invoice details: invoice number instead of the UNIREF.
         $this->card($pdf,108,53,80,50,$tr->t('details'));
-        $pdf->SetXY(112,65);$pdf->SetFont($font,'B',8.5);$pdf->Cell(26,6,$this->t($tr->t('invoice_number').':'));$pdf->SetFont($font,'B',10);$pdf->Cell(46,6,$this->t((string)$i['invoice_number']));
+        $pdf->SetXY(112,65);$pdf->SetFont($font,'B',8.5);$pdf->Cell(26,6,$this->t($tr->t('invoice_number').':'));$pdf->SetFont($font,'B',10);$pdf->Cell(46,6,$this->t((string)(preg_replace('/\AFAT-/','',(string)$i['invoice_number'])??$i['invoice_number'])));
         $details=[[$tr->t('date'),$this->date($i['issued_on'])],[$tr->t('period'),$this->date($i['period_start']??null).' - '.$this->date($i['period_end']??null)],[$tr->t('status'),$tr->status($status)],[$tr->t('nace'),(string)($i['registered_nace_code_snapshot']??'')]];
         $y=72.5;foreach($details as [$label,$value]){$pdf->SetXY(112,$y);$pdf->SetFont($font,'B',8);$pdf->Cell(26,5,$this->t($label.':'));$pdf->SetFont($font,'',8);$pdf->Cell(46,5,$this->t(mb_substr($value,0,34)));$y+=6.8;}
 

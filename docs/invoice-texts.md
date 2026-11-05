@@ -9,8 +9,8 @@ Invoices are rendered **when they are opened**, so a change to these texts or to
 | Part | Content | Change from the recommendations |
 |---|---|---|
 | 1 Header | Logo, "Sistemi i Faturimit Komunal", municipality, issuing directorate, **FATURA**, fiscal year | **UNIREF removed** from the header (rec. 1) |
-| 2 Subjekti | Business name, address, email, **Nr. i klientit**, NRB | **Client number added**: unique per business and editable (rec. 2) |
-| 3 Detajet e faturës | **Nr. i faturës**, Data, Periudha, Statusi, NACE | **UNIREF replaced by the invoice number** (rec. 3). The fixed due date is no longer printed; see part 5 |
+| 2 Subjekti | Business name, address, email, **Nr. i klientit**, NRB | **Client number added**: unique per business, assigned automatically (rec. 2) |
+| 3 Detajet e faturës | **Nr. i faturës**, Data, Periudha, Statusi, NACE | Label **"UNIREF" renamed "Nr. i faturës"**; the number itself is unchanged (it is the UNIREF) (rec. 3). The fixed due date is no longer printed; see part 5 |
 | 4 Description and amounts | Tax line: **activity tax or professional-services tax** by NACE code (rec. 4). Amounts box: **Taksa për vitin YYYY**, **Borxhi paraprak**, (Paguar, only when something was paid), **TOTALI** | Payment reference shown **larger**: framed UNIREF in 19 pt bold, with the barcode below it |
 | 5 Footer | Address, email, IBAN; **Baza ligjore**; **Afati i pagesës**; **VËREJTJE**; system note; "Dokument i gjeneruar…" | Legal basis, payment terms and the enforcement warning added (rec. 5) |
 
@@ -33,7 +33,7 @@ These texts are read from the server environment file **`/cloudclusters/arbk-env
 | Tax line, general businesses | `INVOICE_TAX_LABEL` | Taksa për ushtrimin e veprimtarisë |
 | Tax line, professional services | `INVOICE_TAX_LABEL_PROFESSIONAL` | Taksa për leje për shërbime profesionale |
 | Which NACE codes are professional services | `INVOICE_PROFESSIONAL_NACE` | `69,70,71,72,73,74,75` (NACE section M) |
-| Legal basis (part 5) | `INVOICE_LEGAL_BASIS` | Në pajtim me dispozitat e nenit 24, paragrafi 2 të Ligjit për Vetëqeverisje Lokale Nr. 03/L-040 të dt. 04.06.2008, nenet 10 dhe 11 të Ligjit për Financat e Pushtetit Lokal Nr. 03-L-049 të dt. 03.06.2008, Rregullorës për ndryshimin dhe plotësimin e rregullorës për tarifa, ngarkesa dhe gjoba komunale nr. 01-030/01-148721/26 të dt. 30.9.2026, Drejtoria për Zhvillim Ekonomik dhe Inovacion lëshon këtë faturë. |
+| Legal basis (part 5) | `INVOICE_LEGAL_BASIS` | Në pajtim me dispozitat e nenit 24, paragrafi 2 të Ligjit për Vetëqeverisje Lokale Nr. 03/L-040 të dt. 04.06.2008, nenet 10 dhe 11 të Ligjit për Financat e Pushtetit Lokal Nr. 03/L-049 të dt. 03.06.2008, Rregullorës për ndryshimin dhe plotësimin e rregullorës për tarifa, ngarkesa dhe gjoba komunale nr. 01-030/01-148721/26 të dt. 30.9.2026, Drejtoria për Zhvillim Ekonomik dhe Inovacion lëshon këtë faturë. |
 | Payment terms | `INVOICE_PAYMENT_TERMS` | Afati i pagesës: 30 ditë nga momenti i pranimit të faturës. |
 | Warning (printed in red) | `INVOICE_WARNING` | VËREJTJE: Në rast të mospagesës mjetet do të realizohen përmes urdhërit përmbarimor. |
 | System note (small grey text) | `INVOICE_LEGAL_TEXT` | Kjo faturë është lëshuar nga sistemi komunal i faturimit. Pagesa realizohet duke përdorur UNIREF-in e paraqitur në faturë. |
@@ -95,34 +95,27 @@ Short labels are in `src/Billing/InvoiceTranslations.php` (array `TEXTS`, one bl
 - **Assignment:** every business has one, unique.
   - Existing businesses were numbered from **100001** in ARBK order.
   - New businesses, for example from an ARBK import, get the next free number automatically.
-- **Editing:** staff change it on the business page (**Bizneset → business → "Edito të dhënat"**, field "Nr. i klientit").
-  - **Format:** up to 20 letters, digits or hyphens, stored in capitals.
-  - **Uniqueness:** a number used by another business is refused, with that business's name shown.
-  - **Reserved numbers:** numbers above the last automatic number are kept for new businesses.
-  - Every change is in the audit log.
-- **Where it appears:** on every invoice of the business (live value, so a change shows on old invoices too), on the business page, and in the Excel "Detyrimet e papaguara" (unpaid obligations). You can also search by it in the business register and the invoice list.
+- **Not editable:** the number is assigned by the system and stays the same.
+- **Where it appears:** on every invoice of the business, old and new, on the business page, and in the Excel "Detyrimet e papaguara" (unpaid obligations). You can also search by it in the business register and the invoice list.
 
 ## 5. Invoice number (Nr. i faturës)
 
-- **Format:** `YYYY-NNNNNN` per fiscal year, for example `2026-000437`, separate from the UNIREF. The UNIREF stays the payment reference (header-free, shown large next to the barcode).
-- **Existing invoices:** invoices numbered by the system (number = UNIREF, or the old `FAT-…` form) were renumbered by migration 0029, per fiscal year in order of issue date.
-  - The old number is kept in each invoice's history ("Edituar", with the comment "Numri i faturës u nda nga UNIREF-i").
-  - Numbers typed by hand on manual invoices were not changed.
-- **New invoices** continue the year's sequence. A manual invoice can still be given an external number.
-- **Payment reports** are matched by UNIREF, or by invoice number, so both old and new numbers work.
+- **The number does not change:** the invoice number is the UNIREF, as before (for example `PREAH71120005439`). Only the label in "Detajet e faturës" changed, from "UNIREF" to "Nr. i faturës".
+- **The UNIREF is also the payment reference.** It is printed again, framed and large, above the barcode.
+- **Manual invoices** can still be given an external number.
+- **If a server already ran the first version of migration 0029**, which gave invoices separate numbers (`2026-000001`), migration 0031 puts the UNIREF back as the number. It writes the change to the invoice history ("Numri i faturës u rikthye në UNIREF.").
 
 ## 6. Rework of existing invoices
 
-Migration 0029 runs automatically during the deploy. It does the following:
-1. Gives every business a client number.
-2. Renumbers the system-numbered invoices (section 5).
-3. Queues the annual-job bulk exports (PDF and Excel under "Faturimi vjetor") to be rebuilt with the new design by the export worker.
+Migrations 0029 and 0031 run automatically during the deploy. They do the following:
+1. Give every business a client number.
+2. Queue the annual-job bulk exports (PDF and Excel under "Faturimi vjetor") to be rebuilt with the new design by the export worker.
+3. Keep the UNIREF as the invoice number (section 5).
 
 Single invoices need nothing: they always show the new design. Back up the database before deploying.
 
 ## 7. Points to confirm before printing
 
-- **Law number:** the legal-basis text is as received: "Ligjit për Financat e Pushtetit Lokal **Nr. 03-L-049**". The official numbering is usually written **03/L-049**, as for 03/L-040 in the same sentence. Confirm and, if needed, set `INVOICE_LEGAL_BASIS` with the corrected text.
 - **"30 ditë nga momenti i pranimit":** the system still stores a due date (issue date + `INVOICE_DUE_DAYS`, 30 by default). It uses it only internally, to mark invoices as overdue; it is no longer printed.
 - **English and Serbian legal texts** are working translations. Have them reviewed, then set `INVOICE_LEGAL_BASIS_EN` / `_SR`, `INVOICE_WARNING_EN` / `_SR` if the wording changes.
 - **Professional-services list:** confirm which activities the regulation treats as professional services, and adjust `INVOICE_PROFESSIONAL_NACE`.

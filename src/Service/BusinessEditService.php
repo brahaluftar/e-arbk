@@ -20,21 +20,9 @@ final class BusinessEditService
         foreach(self::BITS as $field){$raw=$this->nullable($input[$field]??null);if($raw!==null&&!in_array($raw,['0','1'],true))throw new DomainException("Fusha $field nuk është valide.");$values[$field]=$raw===null?null:(int)$raw;}
         foreach(self::DECIMALS as $field){$raw=$this->nullable($input[$field]??null);$raw=$raw===null?null:str_replace(',','.',$raw);if($raw!==null&&!is_numeric($raw))throw new DomainException("Fusha $field duhet të jetë numerike.");$value=$raw===null?null:(float)$raw;if($value!==null&&($value<0||$value>100))throw new DomainException("Fusha $field duhet të jetë ndërmjet 0 dhe 100.");$values[$field]=$value;}
         if($values['pronare_grua']!==1)$values['pronesia_grua']=null;if($values['pronar_veteran']!==1)$values['perqindja_veteran']=null;
-        if(array_key_exists('client_number',$input))$values['client_number']=$this->clientNumber((string)$input['client_number'],$businessId);
         $this->pdo->beginTransaction();try{$statement=$this->pdo->prepare('SELECT * FROM dbo.ARBK_LIST WITH(UPDLOCK,ROWLOCK) WHERE REGULATION_ID=:id');$statement->execute(['id'=>$businessId]);$previous=$statement->fetch();if(!is_array($previous))throw new DomainException('Biznesi nuk u gjet.');$assignments=[];foreach(array_keys($values) as $field)$assignments[]="[$field]=:$field";$values['id']=$businessId;$this->pdo->prepare('UPDATE dbo.ARBK_LIST SET '.implode(',',$assignments).',import_updated_at=SYSUTCDATETIME() WHERE REGULATION_ID=:id')->execute($values);$current=$this->pdo->prepare('SELECT * FROM dbo.ARBK_LIST WHERE REGULATION_ID=:id');$current->execute(['id'=>$businessId]);$this->audit->record($userId,'BUSINESS_MANUAL_UPDATE','BUSINESS',(string)$businessId,$this->auditValues($previous),$this->auditValues($current->fetch()?:[]));$this->pdo->commit();}catch(Throwable $e){if($this->pdo->inTransaction())$this->pdo->rollBack();throw $e;}
-    }
-    /** Client number printed on invoices: required, unique, letters/digits/hyphen; numbers not yet issued automatically are reserved. */
-    private function clientNumber(string $raw,int $businessId):string
-    {
-        $value=strtoupper(trim($raw));
-        if(preg_match('/\A[0-9A-Z][0-9A-Z-]{0,19}\z/',$value)!==1)throw new DomainException('Numri i klientit është i detyrueshëm: deri në 20 shkronja, shifra ose viza.');
-        $taken=$this->pdo->prepare('SELECT Emri FROM dbo.ARBK_LIST WHERE client_number=:number AND REGULATION_ID<>:id');$taken->execute(['number'=>$value,'id'=>$businessId]);$owner=$taken->fetchColumn();$taken->closeCursor();
-        if($owner!==false)throw new DomainException('Numri i klientit '.$value.' i përket biznesit '.$owner.'.');
-        $next=$this->pdo->query("SELECT CONVERT(bigint,current_value) FROM sys.sequences WHERE name='arbk_client_number_seq' AND schema_id=SCHEMA_ID('dbo')")->fetchColumn();
-        if(ctype_digit($value)&&$next!==false&&$next!==null&&(int)$value>(int)$next)throw new DomainException('Numrat mbi '.(int)$next.' janë të rezervuar për bizneset e reja; zgjidhni një numër tjetër.');
-        return $value;
     }
     private function nullable(mixed $value):?string{$value=trim((string)$value);return $value===''?null:$value;}
     /** @param array<string,mixed> $row @return array<string,mixed> */
-    private function auditValues(array $row):array{$fields=array_merge(array_keys(self::TEXT),self::INTEGERS,self::BITS,self::DECIMALS,['client_number']);return array_intersect_key($row,array_flip($fields));}
+    private function auditValues(array $row):array{$fields=array_merge(array_keys(self::TEXT),self::INTEGERS,self::BITS,self::DECIMALS);return array_intersect_key($row,array_flip($fields));}
 }
