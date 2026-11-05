@@ -51,6 +51,17 @@ Branch `feature/bugfixes-and-proposals`. Bug IDs (B-xx) and proposal IDs (S-xx) 
 - The ZIP package `e-arbk-code-2026.10.22` contains the PHP 8.1 bug; deploy from GitHub instead.
 - **Missing email/municipality settings no longer stop the application.** `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MUNICIPALITY_NAME`, `MUNICIPALITY_ADDRESS`, `MUNICIPALITY_CONTACT` and `MUNICIPAL_BANK_ACCOUNT` are now warnings: they are shown by the preflight, the deploy and the admin dashboard. Until they are set, emails are not sent and invoices print those fields blank. The security checks (HTTPS, APP_KEY, database encryption, debug off) still stop the application.
 
+## Fix: closed businesses shown as active (November 2026)
+
+**Cause:**
+- The ATK synchronization in `bin/run-scheduled.php` runs every 15 minutes. It rewrote `business_atk_status` for every business from `ATK_LIST` alone, so any business not in the ATK list got `ACTIVE`, even when ARBK marks it closed (`ATK_MBYLLUR=1`), passive (`Pasiv=1`) or dissolved.
+- The older status rule (`COALESCE(business_atk_status, ATK_MBYLLUR)`, still in `v_business_master`) only used the ARBK flag when there was no ATK row. After the first synchronization, the flag was never used, and `Pasiv` was never considered.
+
+**Fix (migration `0030_arbk_closure_wins_over_atk.sql`):**
+- **ARBK closure decides first.** A business closed, passive or dissolved in ARBK is `DEACTIVATED` in `v_business_billing` and `v_business_master`, also when the ATK list is ambiguous.
+- **The synchronization keeps it that way.** It writes `DEACTIVATED` with source `ARBK` for these businesses, and it never sets a closed business back to `ACTIVE`.
+- **Existing rows are corrected** by the migration.
+
 ## Invoice redesign (November 2026)
 
 The invoice follows the recommendations for the business tax invoice. Migration `0029_client_and_invoice_numbers.sql`. The full list of texts and where to change them is in **docs/invoice-texts.md**.
