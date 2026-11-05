@@ -536,12 +536,13 @@ COALESCE(s.status_code, CASE WHEN a.ATK_MBYLLUR = 1 THEN 'DEACTIVATED' ELSE 'ACT
 | 0026 | billing_consistency_and_finance | Payment storno columns; `business_invoice_events` (history with comments); `payment_import_batches` / `payment_import_rows` (Finance Directorate reports); job items get `id` + `business_unit_id`; views `v_invoice_balance` and `v_business_billing`; invoice status backfill; cached PDF keys cleared |
 | 0027 | uniref_check_character_procedure | Function `fn_uniref_check_character` (MOD-36 check character in T-SQL) and procedure `usp_fix_uniref_check_characters` (checks every invoice UNIREF and corrects a wrong check character) |
 | 0028 | payment_clear_and_restore | Report row status `CLEARED`, invoice event `PAYMENTS_CLEARED`, `payment_import_batches.restored_at` / `restored_by_user_id` |
-| 0029 | client_and_invoice_numbers | `ARBK_LIST.client_number` (unique, default from sequence `arbk_client_number_seq`, existing businesses numbered from 100001); `invoice_number_sequences`; system-numbered invoices renumbered `YYYY-NNNNNN` with an `EDITED` history event; annual-job exports queued for rebuild |
+| 0029 | client_and_invoice_numbers | `ARBK_LIST.client_number` (unique, default from sequence `arbk_client_number_seq`, existing businesses numbered from 100001; not editable); annual-job exports queued for rebuild |
 | 0030 | arbk_closure_wins_over_atk | ARBK closure (`ATK_MBYLLUR`, `Pasiv`, `DATA_SHUARJES`, `Statusi='Shuar'`) decides before the ATK result in `v_business_billing` and `v_business_master`; existing `business_atk_status` rows of closed businesses set to `DEACTIVATED` (`matched_by='ARBK'`) |
+| 0031 | invoice_number_is_uniref_again | Where the first version of 0029 had renumbered invoices `YYYY-NNNNNN`, the UNIREF is restored as the number (history event); `invoice_number_sequences` dropped |
 
 **Runner** (`bin/migrate.php`): creates `schema_migrations` if it is missing; runs each pending `*.sql` in name order; splits batches on lines that contain only `GO`; wraps **each file** in one transaction; records the file name.
 
-**Rules for new migrations:** next number `0031_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
+**Rules for new migrations:** next number `0032_…sql`; start with `SET XACT_ABORT ON;` + `GO`; stay idempotent where practical (`IF COL_LENGTH…`); never edit an applied migration; add any new table to `DatabaseTransfer::TABLES` (views to `VIEWS`, functions and procedures to `ROUTINES`) so the transfer and the preflight checks include it (see B-10).
 
 ---
 
@@ -656,7 +657,7 @@ It returns `{codes, activities, guids}` and audits `TARIFF_MASTER_RELATION_SYNC`
 
 - `create(businessId, input, actor)`: name ≤ 255 and address ≤ 500 required; optional phone/email/manager; NACE `^[0-9A-Z]{4,20}$` (upper-cased); description ≤ 510; tariff > 0 (comma allowed); `auto_invoice` checkbox (needs a tariff). Audit `BUSINESS_UNIT_CREATED`.
 - `updateContacts(...)`: address (required), phone, email, manager. Audit `BUSINESS_UNIT_CONTACTS_UPDATED`.
-- `generateInvoice(unitId, year, actor, dueDays)`: the unit must be active with a tariff; there must be no unit invoice for that year; the NACE must be exactly 4 characters. Allocates the next UNIREF and inserts an invoice (number = next `YYYY-NNNNNN` of the year since migration 0029, issued today, due today + dueDays, period 1 Jan–31 Dec of the year, 12 months, name snapshot "{business} — {unit}"). Audit `UNIT_INVOICE_CREATED`.
+- `generateInvoice(unitId, year, actor, dueDays)`: the unit must be active with a tariff; there must be no unit invoice for that year; the NACE must be exactly 4 characters. Allocates the next UNIREF and inserts an invoice (number = UNIREF, issued today, due today + dueDays, period 1 Jan–31 Dec of the year, 12 months, name snapshot "{business} — {unit}"). Audit `UNIT_INVOICE_CREATED`.
 - `generateAutomatic(year, …)`: every active `auto_invoice` unit with a tariff and no invoice for the year. A `DomainException` counts as "skipped".
 
 ### 8.7 Finance
@@ -907,11 +908,11 @@ Legend: **A** ADMIN, **O** OFFICIAL, **R** READ_ONLY, **B** BUSINESS, **P** publ
 **Invoice document (November 2026 redesign, `InvoicePdfRenderer`).** Five parts:
 1. **Header:** system, municipality, issuing directorate, "FATURA" and fiscal year; no UNIREF.
 2. **Taxpayer:** with `client_number` (live from `ARBK_LIST`).
-3. **Details:** invoice number, date, period, status, NACE.
+3. **Details:** invoice number (labelled "Nr. i faturës"; it is the UNIREF), date, period, status, NACE.
 4. **Tax line:** `InvoiceTranslations::taxLabel()`, the professional-services label for the NACE prefixes in `INVOICE_PROFESSIONAL_NACE` and the activity label otherwise. Next to it, the framed UNIREF in 19 pt, the Code 39 barcode, and the amounts: tax of the year, previous debt, paid when > 0, total.
 5. **Footer:** contacts, legal basis, payment terms, warning, system note.
 
-Every text and its `.env` key is listed in `docs/invoice-texts.md`. Invoice numbers come from `InvoiceNumberSequence` (`MERGE … HOLDLOCK` on `invoice_number_sequences`, format `YYYY-NNNNNN`) inside `InvoiceFactory::issue()`. The UNIREF stays the payment reference.
+Every text and its `.env` key is listed in `docs/invoice-texts.md`. The invoice number stays the UNIREF, which is also the payment reference.
 
 **Revenue drill-down** (`RevenueRepository`, `App\Support\NaceSections`):
 

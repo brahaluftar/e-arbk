@@ -9,7 +9,7 @@ final class InvoicePdfRendererTest extends TestCase
     /** @return array<string,mixed> */
     public static function invoice(): array
     {
-        return ['invoice_number'=>'2026-000001','fiscal_year'=>2026,'client_number'=>'100123','business_name_snapshot'=>'Biznes Test Çelësi','business_address_snapshot'=>'Rr. Nënë Tereza, Prishtinë','business_email'=>'test@example.com','registration_number_snapshot'=>'810000001','issued_on'=>'2026-10-07','period_start'=>'2026-10-07','period_end'=>'2027-10-06','uniref'=>'PREAH1234000001X','registered_nace_code_snapshot'=>'1234','nace_description_snapshot'=>'Shërbim komunal','annual_tariff'=>'125.00','amount'=>'125.00','paid_amount'=>'25.00','previous_debt'=>'40.50','balance_status'=>'PARTIALLY_PAID','due_on'=>'2026-11-06'];
+        return ['invoice_number'=>'PREAH1234000001X','fiscal_year'=>2026,'client_number'=>'100123','business_name_snapshot'=>'Biznes Test Çelësi','business_address_snapshot'=>'Rr. Nënë Tereza, Prishtinë','business_email'=>'test@example.com','registration_number_snapshot'=>'810000001','issued_on'=>'2026-10-07','period_start'=>'2026-10-07','period_end'=>'2027-10-06','uniref'=>'PREAH1234000001X','registered_nace_code_snapshot'=>'1234','nace_description_snapshot'=>'Shërbim komunal','annual_tariff'=>'125.00','amount'=>'125.00','paid_amount'=>'25.00','previous_debt'=>'40.50','balance_status'=>'PARTIALLY_PAID','due_on'=>'2026-11-06'];
     }
 
     private function config(): Config
@@ -56,5 +56,6 @@ final class InvoicePdfRendererTest extends TestCase
         self::assertSame('Custom warning',(new InvoiceTranslations('en',$config))->t('warning'));
         self::assertStringStartsWith('VËREJTJE:',(new InvoiceTranslations('sq',$config))->t('warning'));
         self::assertStringContainsString('nr. 01-030/01-148721/26',(new InvoiceTranslations('sq',$config))->t('legal_basis'));
+        self::assertStringContainsString('Nr. 03/L-049',(new InvoiceTranslations('sq',$config))->t('legal_basis'));
     }
 }

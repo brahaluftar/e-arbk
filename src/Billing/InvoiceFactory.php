@@ -8,21 +8,19 @@ use PDO;
 use PDOException;
 
 /**
- * The only place that inserts invoices. Every invoice gets a UNIREF (the payment reference), an invoice number
- * of the fiscal year (2026-000001, unless an external number is given), a CREATED history event and an audit record.
+ * The only place that inserts invoices. Every invoice gets a UNIREF (also used as its number unless
+ * an external number is given), a CREATED history event and an audit record.
  * Callers own the surrounding transaction.
  */
 final class InvoiceFactory
 {
     private UnirefSequence $sequences;
     private InvoiceHistory $history;
-    private InvoiceNumberSequence $numbers;
 
-    public function __construct(private PDO $pdo, private AuditLogger $audit, ?UnirefSequence $sequences = null, ?InvoiceHistory $history = null, ?InvoiceNumberSequence $numbers = null)
+    public function __construct(private PDO $pdo, private AuditLogger $audit, ?UnirefSequence $sequences = null, ?InvoiceHistory $history = null)
     {
         $this->sequences = $sequences ?? new UnirefSequence($pdo);
         $this->history = $history ?? new InvoiceHistory($pdo);
-        $this->numbers = $numbers ?? new InvoiceNumberSequence($pdo);
     }
 
     /**
@@ -42,8 +40,8 @@ final class InvoiceFactory
         if ($amount <= 0) throw new DomainException('Shuma e faturës duhet të jetë pozitive.');
         $uniref = $this->sequences->next($nace);
         $number = trim((string) ($draft['invoice_number'] ?? ''));
-        if ($number === '') $number = $this->numbers->next($year);
-        // The same base reference may never be invoiced twice; older invoices may still carry a UNIREF as their number.
+        if ($number === '') $number = $uniref;
+        // The same base reference may never be invoiced twice (UNIREF doubles as the invoice number).
         $existing = $this->pdo->prepare('SELECT COUNT(*) FROM dbo.business_invoices WHERE uniref=:uniref OR invoice_number=:uniref_number');
         $existing->execute(['uniref' => $uniref, 'uniref_number' => $uniref]);
         $taken = (int) $existing->fetchColumn() > 0;

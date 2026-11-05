@@ -10,7 +10,7 @@ use Throwable;
 /** Logical, fresh-database transfer of the application's SQL Server objects. */
 final class DatabaseTransfer
 {
-    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_number_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
+    public const TABLES = ['app_users','ARBK_LIST','ATK_LIST','NACE_LIST','business_atk_status','business_nace_assignments','audit_log','business_import_runs','business_import_staging','schema_migrations','login_rate_limits','password_reset_tokens','business_invoices','business_invoice_payments','business_user_links','business_access_requests','business_registration_invites','invoice_uniref_sequences','invoice_appeals','invoice_appeal_events','business_permits','outbound_messages','message_action_links','message_events','annual_invoice_jobs','annual_invoice_job_items','business_units','business_invoice_events','payment_import_batches','payment_import_rows'];
     /** Views recreated after the data, in dependency order. */
     public const VIEWS = ['v_business_master','v_invoice_balance','v_business_billing'];
     /** Functions and procedures recreated after the views, in dependency order (name => sys.objects type). */
